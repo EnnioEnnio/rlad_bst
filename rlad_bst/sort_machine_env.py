@@ -2,17 +2,26 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
+from gymnasium import spaces
+from gymnasium.envs.registration import register
+from gymnasium.utils.env_checker import check_env
+
+register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 
 
 class SortingMachine(gym.Env):
-    def __init__(self, data_len, program_length):
+    metadata = {"render_modes": ["human"], "render_fps": 1}
+
+    def __init__(self, data_len, program_len, verbosity=1, render_mode=None):
         self.data_len = data_len
+        self.render_mode = render_mode
+        self.verbosity = verbosity
 
         self._initial_machine_state()
         self.correct_tree = self._make_binary_tree()
 
         # Each command gets his own number
-        self.action_space = gym.spaces.Discrete(14)
+        self.action_space = spaces.Discrete(14)
 
         self._action_to_command = {
             0: self.right,
@@ -28,24 +37,46 @@ class SortingMachine(gym.Env):
             10: self.isnotequal,
             11: self.drop,
             12: self.swapright,
-            14: self.compareright,
+            13: self.compareright,
         }
 
         # The programm can observe the
         self.observation_space = gym.spaces.Dict(
             {
-                "program": gym.spaces.Discrete(
-                    program_length
-                ),  # TODO: Do I need to limit this??
-                "data": gym.spaces.Discrete(data_len),
-                "pointers": gym.spaces.Discrete(data_len),
-                "stack": gym.spaces.Discrete(data_len),
-                "skipflag": gym.spaces.Discrete(1),
-                "commandpointer": gym.spaces.Discrete(1),
-                "lastcommand": gym.spaces.Discrete(1),
-                "lastconditional": gym.spaces.Discrete(1),
-                "execcost": gym.spaces.Discrete(1),
-                "storage": gym.spaces.Discrete(1),
+                "program": spaces.Sequence(
+                    spaces.Box(
+                        low=-np.inf, high=np.inf, shape=(), dtype=np.float64
+                    ),
+                    stack=True,
+                ),
+                "data": spaces.Sequence(
+                    spaces.Box(low=0, high=np.inf, shape=(), dtype=np.int64),
+                    stack=True,
+                ),
+                "pointers": spaces.Sequence(
+                    spaces.Box(low=0, high=np.inf, shape=(), dtype=np.int64),
+                    stack=True,
+                ),
+                "stack": spaces.Sequence(
+                    spaces.Box(
+                        low=-np.inf, high=np.inf, shape=(), dtype=np.float64
+                    ),
+                    stack=True,
+                ),
+                "skipflag": spaces.Discrete(2),
+                "commandpointer": spaces.Box(
+                    low=0, high=np.inf, shape=(), dtype=np.int64
+                ),
+                "lastcommand": spaces.MultiBinary(1),
+                "lastconditional": spaces.Discrete(
+                    3, start=-1
+                ),  # None (-1), True (1), or False (0)
+                "execcost": spaces.Box(
+                    low=0, high=np.inf, shape=(), dtype=np.int64
+                ),
+                "storage": spaces.Box(
+                    low=-1, high=np.inf, shape=(), dtype=np.int64
+                ),
             }
         )
 
@@ -57,7 +88,7 @@ class SortingMachine(gym.Env):
         self.skipflag: bool = False
         self.commandpointer: int = 0
         self.lastcommand: np.array = np.zeros((1), dtype=bool)
-        self.lastconditional: Optional[bool] = None
+        self.lastconditional: int = -1
         self.execcost: int = 0
         self.storage: int = -1
 
@@ -73,7 +104,8 @@ class SortingMachine(gym.Env):
             in_order(2 * index + 2, sorted_tree, result)
 
         output_tree = [None] * len(self.data)
-        in_order(0, self.data, output_tree)
+        sorted_tree = list(self.data)
+        in_order(0, sorted_tree, output_tree)
         return np.array(output_tree)
 
     def _get_obs(self) -> dict:
@@ -91,7 +123,7 @@ class SortingMachine(gym.Env):
         }
 
     def _get_info(self):
-        return
+        return {}
 
     def reset(
         self, seed: Optional[int] = None, options: Optional[dict] = None
@@ -101,7 +133,12 @@ class SortingMachine(gym.Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action):
-        self.lastconditional = None
+        self.lastcommand = action
+        self.commandpointer += 1
+
+        self.program = np.append(self.program, action)
+
+        self.lastconditional = -1  # Set to None
         if self.skipflag:
             self.skipflag = False
             return self._get_obs(), 0, False, False, self._get_info()
@@ -110,9 +147,40 @@ class SortingMachine(gym.Env):
 
         terminated = np.array_equal(self.data, self.correct_tree)
         reward = terminated  # TODO: Better reward function
-        truncated = False  # TODO: Whats that?
+        truncated = False  # Used to limit steps
 
-        return self._get_obs(), reward, terminated, truncated, self._get_info()
+        return (
+            self._get_obs(),
+            float(reward),
+            terminated,
+            truncated,
+            self._get_info(),
+        )
+
+    def render(self):
+        print("---")
+        if self.verbosity >= 2:
+            print("data: ", self.highlight_nth_element())
+        print("pointers: ", self.pointers)
+        print("stack: ", self.stack)
+        print("skipflag: ", self.skipflag)
+        print("commandpointer: ", self.commandpointer)
+        print("lastcommand: ", self.lastcommand)
+        print("lastconditional: ", self.lastconditional)
+        print("execcost: ", self.execcost)
+        print("---")
+
+    def highlight_nth_element(self):
+        # Convert the integer array into a string (space-separated)
+        arr_str = " ".join(map(str, self.data))
+
+        # Get the nth element to highlight
+        nth_element = str(self.data[self.pointers[-1]])
+
+        # Highlight the nth element by adding square brackets around it
+        highlighted_str = arr_str.replace(nth_element, f"[{nth_element}]")
+
+        return highlighted_str
 
     # Available commands #
 
@@ -170,3 +238,33 @@ class SortingMachine(gym.Env):
         self.skipflag = (
             self.data[self.pointers[-1]] <= self.data[self.pointers[-1] + 1]
         )
+
+
+if __name__ == "__main__":
+    # Test env
+    def wait_for_debugger(port: int = 5678):
+        """
+        Pauses the program until a remote debugger is attached.
+        Should only be called on rank0.
+        """
+
+        import debugpy
+
+        debugpy.listen(("0.0.0.0", port))
+        print(f"Waiting for client to attach on port {port}... ")
+        debugpy.wait_for_client()
+
+    wait_for_debugger()
+    env = gym.make(
+        "rlad/bst-v0", render_mode="human", data_len=10, program_len=100
+    )
+
+    check_env(env.unwrapped)
+
+    obs = env.reset()[0]
+    print(obs)
+
+    for _ in range(10):
+        rand_action = env.action_space.sample()
+        obs, reward, terminated, _, _ = env.step(rand_action)
+        print(rand_action, obs, reward, terminated)
