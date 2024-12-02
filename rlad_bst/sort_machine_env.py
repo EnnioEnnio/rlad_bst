@@ -5,6 +5,7 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 from gymnasium.utils.env_checker import check_env
+from stable_baselines3 import PPO
 
 register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 
@@ -12,7 +13,7 @@ register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 class SortingMachine(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 1}
 
-    def __init__(self, data_len, program_len, verbosity=1, render_mode=None):
+    def __init__(self, data_len, verbosity=1, render_mode=None):
         self.data_len = data_len
         self.render_mode = render_mode
         self.verbosity = verbosity
@@ -38,30 +39,24 @@ class SortingMachine(gym.Env):
             11: self.drop,
             12: self.swapright,
             13: self.compareright,
+            14: self.leftchild,
+            15: self.rightchild,
+            16: self.parent,
         }
 
-        # The programm can observe the
         self.observation_space = gym.spaces.Dict(
             {
-                "program": spaces.Sequence(
-                    spaces.Box(
-                        low=-np.inf, high=np.inf, shape=(), dtype=np.float64
-                    ),
-                    stack=True,
+                "program": spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(100), dtype=np.float64
                 ),
-                "data": spaces.Sequence(
-                    spaces.Box(low=0, high=np.inf, shape=(), dtype=np.int64),
-                    stack=True,
+                "data": spaces.Box(
+                    low=0, high=np.inf, shape=(10), dtype=np.int64
                 ),
-                "pointers": spaces.Sequence(
-                    spaces.Box(low=0, high=np.inf, shape=(), dtype=np.int64),
-                    stack=True,
+                "pointers": spaces.Box(
+                    low=0, high=np.inf, shape=(10), dtype=np.int64
                 ),
-                "stack": spaces.Sequence(
-                    spaces.Box(
-                        low=-np.inf, high=np.inf, shape=(), dtype=np.float64
-                    ),
-                    stack=True,
+                "stack": spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(10), dtype=np.float64
                 ),
                 "skipflag": spaces.Discrete(2),
                 "commandpointer": spaces.Box(
@@ -146,7 +141,7 @@ class SortingMachine(gym.Env):
         self._action_to_command[action]()
 
         terminated = np.array_equal(self.data, self.correct_tree)
-        reward = terminated  # TODO: Better reward function
+        reward = terminated  # TODO: Better reward function, switches or
         truncated = False  # Used to limit steps
 
         return (
@@ -239,6 +234,19 @@ class SortingMachine(gym.Env):
             self.data[self.pointers[-1]] <= self.data[self.pointers[-1] + 1]
         )
 
+    def leftchild(self):
+        left_child = self.pointers[-1] * 2 + 1
+        if left_child < len(self.data):
+            self.pointers[-1] = left_child
+
+    def rightchild(self):
+        right_child = self.pointers[-1] * 2 + 2
+        if right_child < len(self.data):
+            self.pointers = right_child
+
+    def parent(self):
+        self.pointers[-1] = int((self.pointers[-1] - 1) / 2)
+
 
 if __name__ == "__main__":
     # Test env
@@ -255,16 +263,19 @@ if __name__ == "__main__":
         debugpy.wait_for_client()
 
     wait_for_debugger()
-    env = gym.make(
-        "rlad/bst-v0", render_mode="human", data_len=10, program_len=100
-    )
+
+    env = gym.make("rlad/bst-v0", render_mode="human", data_len=10)
 
     check_env(env.unwrapped)
 
-    obs = env.reset()[0]
-    print(obs)
+    model = PPO("MlpPolicy", env, verbose=1)
+    model.learn(total_timesteps=10_000)
 
-    for _ in range(10):
-        rand_action = env.action_space.sample()
-        obs, reward, terminated, _, _ = env.step(rand_action)
-        print(rand_action, obs, reward, terminated)
+    vec_env = model.get_env()
+    obs = vec_env.reset()
+    for i in range(1000):
+        action, _states = model.predict(obs, deterministic=True)
+        obs, reward, done, info = vec_env.step(action)
+        vec_env.render()
+
+    env.close()
