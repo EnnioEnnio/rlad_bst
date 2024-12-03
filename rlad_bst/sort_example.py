@@ -1,7 +1,8 @@
 import random
 
 import numpy as np
-from sortmachine import Command, SortMachine, getcode
+
+from .sortmachine import Command, SortMachine, getcode
 
 
 def wait_for_debugger(port: int = 5678):

@@ -138,7 +138,7 @@ class SortingMachine(gym.Env):
 
     def reset(
         self, seed: Optional[int] = None, options: Optional[dict] = None
-    ) -> [dict, None]:
+    ) -> list[dict, None]:
         super().reset(seed=seed)
         self._initial_machine_state()
         return self._get_obs(), self._get_info()
@@ -314,7 +314,7 @@ if __name__ == "__main__":
 
     vec_env = model.get_env()
     obs = vec_env.reset()
-    for i in range(1000):
+    for _ in range(1000):
         action, _states = model.predict(obs, deterministic=True)
         obs, reward, done, info = vec_env.step(action)
         vec_env.render()
