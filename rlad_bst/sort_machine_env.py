@@ -13,8 +13,9 @@ register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 class SortingMachine(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 1}
 
-    def __init__(self, data_len, verbosity=1, render_mode=None):
+    def __init__(self, data_len, program_len, verbosity=1, render_mode=None):
         self.data_len = data_len
+        self.program_len = program_len
         self.render_mode = render_mode
         self.verbosity = verbosity
 
@@ -22,8 +23,6 @@ class SortingMachine(gym.Env):
         self.correct_tree = self._make_binary_tree()
 
         # Each command gets his own number
-        self.action_space = spaces.Discrete(14)
-
         self._action_to_command = {
             0: self.right,
             1: self.left,
@@ -44,19 +43,24 @@ class SortingMachine(gym.Env):
             16: self.parent,
         }
 
+        self.action_space = spaces.Discrete(len(self._action_to_command))
+
         self.observation_space = gym.spaces.Dict(
             {
                 "program": spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(100), dtype=np.float64
+                    low=-1,
+                    high=len(self._action_to_command),
+                    shape=(program_len,),
+                    dtype=np.int64,
                 ),
                 "data": spaces.Box(
-                    low=0, high=np.inf, shape=(10), dtype=np.int64
+                    low=0, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),
                 "pointers": spaces.Box(
-                    low=0, high=np.inf, shape=(10), dtype=np.int64
+                    low=-1, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),
                 "stack": spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(10), dtype=np.float64
+                    low=-1, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),
                 "skipflag": spaces.Discrete(2),
                 "commandpointer": spaces.Box(
@@ -76,7 +80,7 @@ class SortingMachine(gym.Env):
         )
 
     def _initial_machine_state(self):
-        self.program: np.array = np.array([])
+        self.program: np.array = np.array([], dtype=np.int64)
         self.data: list = np.array(list(range(self.data_len)))
         self.pointers: list = [0]
         self.stack: list = []
@@ -104,11 +108,23 @@ class SortingMachine(gym.Env):
         return np.array(output_tree)
 
     def _get_obs(self) -> dict:
+        program = np.concatenate(
+            (
+                self.program,
+                np.ones((self.program_len - len(self.program))) * -1,
+            )
+        ).astype(np.int64)
+        pointers = np.concatenate(
+            (self.pointers, np.ones((self.data_len - len(self.pointers))) * -1)
+        ).astype(np.int64)
+        stack = np.concatenate(
+            (self.stack, np.ones((self.data_len - len(self.stack))) * -1)
+        ).astype(np.int64)
         return {
-            "program": self.program,
+            "program": program,
             "data": self.data,
-            "pointers": self.pointers,
-            "stack": self.stack,
+            "pointers": pointers,
+            "stack": stack,
             "skipflag": self.skipflag,
             "commandpointer": self.commandpointer,
             "lastcommand": self.lastcommand,
@@ -128,17 +144,22 @@ class SortingMachine(gym.Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action):
-        self.lastcommand = action
-        self.commandpointer += 1
-
+        """
+        This function should run the program until the next input is expected.
+        We apply actions as long as:
+        1. We have finished the task
+        2. The machine awaits a new instruction
+        3. We have reached the maximum program length
+        """
         self.program = np.append(self.program, action)
-
-        self.lastconditional = -1  # Set to None
-        if self.skipflag:
-            self.skipflag = False
-            return self._get_obs(), 0, False, False, self._get_info()
-        self.execcost += 1
-        self._action_to_command[action]()
+        while not (
+            np.array_equal(self.data, self.correct_tree)
+            or self.commandpointer >= len(self.program)
+            or self.commandpointer == self.program_len
+        ):
+            self._transition_once()
+            if self.verbosity >= 1:
+                self.render()
 
         terminated = np.array_equal(self.data, self.correct_tree)
         reward = terminated  # TODO: Better reward function, switches or
@@ -151,6 +172,18 @@ class SortingMachine(gym.Env):
             truncated,
             self._get_info(),
         )
+
+    def _transition_once(self):
+        cmd = self.program[self.commandpointer]
+        self.lastcommand = cmd
+        self.commandpointer += 1
+
+        self.lastconditional = -1  # Set to None
+        if self.skipflag:
+            self.skipflag = False
+        else:
+            self.execcost += 1
+            self._action_to_command[cmd]()
 
     def render(self):
         print("---")
@@ -219,6 +252,12 @@ class SortingMachine(gym.Env):
         if len(self.pointers) > 1:
             self.skipflag = self.pointers[-1] == self.pointers[-2]
 
+    def swapwithpointers(self):
+        if len(self.pointers) > 1:
+            temp = self.data[self.pointers[-2]]
+            self.data[self.pointers[-2]] = self.data[self.pointers[-1]]
+            self.data[self.pointers[-1]] = temp
+
     def drop(self):
         if len(self.stack) > 0:
             self.stack.pop()
@@ -264,11 +303,13 @@ if __name__ == "__main__":
 
     wait_for_debugger()
 
-    env = gym.make("rlad/bst-v0", render_mode="human", data_len=10)
+    env = gym.make(
+        "rlad/bst-v0", render_mode="human", data_len=10, program_len=100
+    )
 
     check_env(env.unwrapped)
 
-    model = PPO("MlpPolicy", env, verbose=1)
+    model = PPO("MultiInputPolicy", env, verbose=1)
     model.learn(total_timesteps=10_000)
 
     vec_env = model.get_env()
