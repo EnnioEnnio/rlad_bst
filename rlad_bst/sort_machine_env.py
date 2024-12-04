@@ -19,9 +19,6 @@ class SortingMachine(gym.Env):
         self.render_mode = render_mode
         self.verbosity = verbosity
 
-        self._initial_machine_state()
-        self.correct_tree = self._make_binary_tree()
-
         # Each command gets his own number
         self._action_to_command = {
             0: self.right,
@@ -52,32 +49,35 @@ class SortingMachine(gym.Env):
                     high=len(self._action_to_command),
                     shape=(program_len,),
                     dtype=np.int64,
-                ),
+                ),  # np.array of size program_len
                 "data": spaces.Box(
                     low=0, high=np.inf, shape=(data_len,), dtype=np.int64
-                ),
+                ),  # np.array of size data_len
                 "pointers": spaces.Box(
                     low=-1, high=np.inf, shape=(data_len,), dtype=np.int64
-                ),
+                ),  # np.array of size data_len
                 "stack": spaces.Box(
                     low=-1, high=np.inf, shape=(data_len,), dtype=np.int64
-                ),
-                "skipflag": spaces.Discrete(2),
-                "commandpointer": spaces.Box(
-                    low=0, high=np.inf, shape=(), dtype=np.int64
-                ),
-                "lastcommand": spaces.MultiBinary(1),
+                ),  # np.array of size data_len
+                "skipflag": spaces.Discrete(2),  # np.int64 (0 or 1)
+                "commandpointer": spaces.Discrete(program_len),  # np.int64
+                "lastcommand": spaces.Discrete(
+                    len(self._action_to_command) + 1
+                ),  # np.int64
                 "lastconditional": spaces.Discrete(
                     3, start=-1
-                ),  # None (-1), True (1), or False (0)
+                ),  # np.int64 None (-1), True (1), or False (0)
                 "execcost": spaces.Box(
                     low=0, high=np.inf, shape=(), dtype=np.int64
-                ),
+                ),  # np.int64
                 "storage": spaces.Box(
                     low=-1, high=np.inf, shape=(), dtype=np.int64
-                ),
+                ),  # np.int64
             }
         )
+
+        self._initial_machine_state()
+        self.correct_tree = self._make_binary_tree()
 
     def _initial_machine_state(self):
         self.program: np.array = np.array([], dtype=np.int64)
@@ -86,7 +86,7 @@ class SortingMachine(gym.Env):
         self.stack: list = []
         self.skipflag: bool = False
         self.commandpointer: int = 0
-        self.lastcommand: np.array = np.zeros((1), dtype=bool)
+        self.lastcommand: int = len(self._action_to_command)
         self.lastconditional: int = -1
         self.execcost: int = 0
         self.storage: int = -1
@@ -129,8 +129,8 @@ class SortingMachine(gym.Env):
             "commandpointer": self.commandpointer,
             "lastcommand": self.lastcommand,
             "lastconditional": self.lastconditional,
-            "execcost": self.execcost,
-            "storage": self.storage,
+            "execcost": np.array(self.execcost),
+            "storage": np.array(self.storage),
         }
 
     def _get_info(self):
@@ -301,7 +301,7 @@ if __name__ == "__main__":
         print(f"Waiting for client to attach on port {port}... ")
         debugpy.wait_for_client()
 
-    wait_for_debugger()
+    # wait_for_debugger()
 
     env = gym.make(
         "rlad/bst-v0", render_mode="human", data_len=10, program_len=100
