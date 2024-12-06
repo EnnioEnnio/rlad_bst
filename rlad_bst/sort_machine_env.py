@@ -7,6 +7,8 @@ from gymnasium.envs.registration import register
 from gymnasium.utils.env_checker import check_env
 from stable_baselines3 import PPO
 
+from .reward import calculate_reward
+
 register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 
 
@@ -162,7 +164,9 @@ class SortingMachine(gym.Env):
                 self.render()
 
         terminated = np.array_equal(self.data, self.correct_tree)
-        reward = terminated  # TODO: Better reward function, switches or
+        reward = calculate_reward(
+            solution_arr=self.correct_tree, dandidate_arr=self.data
+        )
         truncated = False  # Used to limit steps
 
         return (
