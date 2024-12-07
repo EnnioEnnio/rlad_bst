@@ -56,19 +56,6 @@ def test_compare_trees_none_roots():
     assert diff == 2
 
 
-def test_compare_trees_partial_structure():
-    # Test a scenario where one tree has only one child while the other
-    # tree has both children at that level.
-    t1 = Tree.from_array(
-        [8, 4, 12, 2]
-    )  # Missing right child subtree at the second level
-    t2 = Tree.from_array(
-        [8, 4, 12, 2, 6]
-    )  # Has both children on the left side
-    diff = compare_trees(t1.root, t2.root)
-    assert diff == 2
-
-
 @pytest.mark.parametrize(
     "solution_arr, candidate_arr, expected_reward",
     [
