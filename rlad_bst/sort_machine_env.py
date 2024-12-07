@@ -15,11 +15,19 @@ register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 class SortingMachine(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 1}
 
-    def __init__(self, data_len, program_len, verbosity=1, render_mode=None):
+    def __init__(
+        self,
+        data_len,
+        program_len,
+        maximum_exec_cost,
+        verbosity=1,
+        render_mode=None,
+    ):
         self.data_len = data_len
         self.program_len = program_len
         self.render_mode = render_mode
         self.verbosity = verbosity
+        self.maximum_exec_cost = maximum_exec_cost
 
         # Each command gets his own number
         self._action_to_command = {
@@ -44,22 +52,26 @@ class SortingMachine(gym.Env):
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
 
+        # We need to pad the observation space
+        # TODO: Could give us problem if the data is too big
+        self.pad = 100  # np.iinfo(np.int64).max
+
         self.observation_space = gym.spaces.Dict(
             {
                 "program": spaces.Box(
-                    low=-1,
+                    low=0,
                     high=len(self._action_to_command),
                     shape=(program_len,),
                     dtype=np.int64,
                 ),  # np.array of size program_len
                 "data": spaces.Box(
-                    low=0, high=np.inf, shape=(data_len,), dtype=np.int64
+                    low=0, high=self.pad, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "pointers": spaces.Box(
-                    low=-1, high=np.inf, shape=(data_len,), dtype=np.int64
+                    low=0, high=data_len, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "stack": spaces.Box(
-                    low=-1, high=np.inf, shape=(data_len,), dtype=np.int64
+                    low=0, high=program_len, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "skipflag": spaces.Discrete(2),  # np.int64 (0 or 1)
                 "commandpointer": spaces.Discrete(program_len),  # np.int64
@@ -67,13 +79,13 @@ class SortingMachine(gym.Env):
                     len(self._action_to_command) + 1
                 ),  # np.int64
                 "lastconditional": spaces.Discrete(
-                    3, start=-1
-                ),  # np.int64 None (-1), True (1), or False (0)
+                    3
+                ),  # np.int64 None (2), True (1), or False (0)
                 "execcost": spaces.Box(
-                    low=0, high=np.inf, shape=(), dtype=np.int64
+                    low=0, high=self.pad, shape=(1,), dtype=np.int64
                 ),  # np.int64
                 "storage": spaces.Box(
-                    low=-1, high=np.inf, shape=(), dtype=np.int64
+                    low=0, high=self.pad, shape=(1,), dtype=np.int64
                 ),  # np.int64
             }
         )
@@ -89,9 +101,9 @@ class SortingMachine(gym.Env):
         self.skipflag: bool = False
         self.commandpointer: int = 0
         self.lastcommand: int = len(self._action_to_command)
-        self.lastconditional: int = -1
+        self.lastconditional: int = 2
         self.execcost: int = 0
-        self.storage: int = -1
+        self.storage: int = self.pad
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -113,26 +125,33 @@ class SortingMachine(gym.Env):
         program = np.concatenate(
             (
                 self.program,
-                np.ones((self.program_len - len(self.program))) * -1,
+                np.ones((self.program_len - len(self.program)))
+                * len(self._action_to_command),
             )
         ).astype(np.int64)
         pointers = np.concatenate(
-            (self.pointers, np.ones((self.data_len - len(self.pointers))) * -1)
+            (
+                self.pointers,
+                np.ones((self.data_len - len(self.pointers))) * self.data_len,
+            )
         ).astype(np.int64)
         stack = np.concatenate(
-            (self.stack, np.ones((self.data_len - len(self.stack))) * -1)
+            (
+                self.stack,
+                np.ones((self.data_len - len(self.stack))) * self.program_len,
+            )
         ).astype(np.int64)
         return {
             "program": program,
             "data": self.data,
             "pointers": pointers,
             "stack": stack,
-            "skipflag": self.skipflag,
+            "skipflag": int(self.skipflag),
             "commandpointer": self.commandpointer,
             "lastcommand": self.lastcommand,
             "lastconditional": self.lastconditional,
-            "execcost": np.array(self.execcost),
-            "storage": np.array(self.storage),
+            "execcost": np.array([self.execcost]),
+            "storage": np.array([self.storage]),
         }
 
     def _get_info(self):
@@ -145,28 +164,36 @@ class SortingMachine(gym.Env):
         self._initial_machine_state()
         return self._get_obs(), self._get_info()
 
+    def _check_terminated(self):
+        return (
+            np.array_equal(self.data, self.correct_tree)
+            or self.commandpointer == self.program_len
+            or self.execcost == self.maximum_exec_cost
+        )
+
     def step(self, action):
         """
         This function should run the program until the next input is expected.
         We apply actions as long as:
-        1. We have finished the task
+        1. We have not terminated, which can happend when:
+            1.1 The solution is correct
+            1.2 The program has reached its max length
+            1.3 The program has reached its maximum execution cost
         2. The machine awaits a new instruction
-        3. We have reached the maximum program length
         """
         self.program = np.append(self.program, action)
         while not (
-            np.array_equal(self.data, self.correct_tree)
+            self._check_terminated()
             or self.commandpointer >= len(self.program)
-            or self.commandpointer == self.program_len
         ):
             self._transition_once()
             if self.verbosity >= 1:
                 self.render()
 
-        terminated = np.array_equal(self.data, self.correct_tree)
         reward = calculate_reward(
             solution_arr=self.correct_tree, candidate_arr=self.data
         )
+        terminated = self._check_terminated()
         truncated = False  # Used to limit steps
 
         return (
@@ -182,7 +209,7 @@ class SortingMachine(gym.Env):
         self.lastcommand = cmd
         self.commandpointer += 1
 
-        self.lastconditional = -1  # Set to None
+        self.lastconditional = 2  # Set to None
         if self.skipflag:
             self.skipflag = False
         else:
@@ -225,7 +252,8 @@ class SortingMachine(gym.Env):
             self.pointers[-1] -= 1
 
     def push(self):
-        self.pointers.append(self.pointers[-1])
+        if len(self.pointers) < self.data_len - 1:
+            self.pointers.append(self.pointers[-1])
 
     def pop(self):
         if len(self.pointers) > 1:
@@ -235,7 +263,8 @@ class SortingMachine(gym.Env):
         self.skipflag = self.data[self.pointers[-1]] <= self.storage
 
     def mark(self):
-        self.stack.append(self.commandpointer - 1)
+        if len(self.stack) < self.data_len - 1:
+            self.stack.append(self.commandpointer - 1)
 
     def jump(self):
         if len(self.stack) != 0:
@@ -268,27 +297,34 @@ class SortingMachine(gym.Env):
         self.skipflag = False
 
     def swapright(self):
-        temp = self.data[self.pointers[-1] + 1]
-        self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
-        self.data[self.pointers[-1]] = temp
+        # TODO: Does not work with the new tree operation. Probably not needed
+        # temp = self.data[self.pointers[-1] + 1]
+        # self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
+        # self.data[self.pointers[-1]] = temp
+        pass
 
     def compareright(self):
-        self.skipflag = (
-            self.data[self.pointers[-1]] <= self.data[self.pointers[-1] + 1]
-        )
+        # TODO: Does not work with the new tree operation. Probably not needed
+        # self.skipflag = (
+        #     self.data[self.pointers[-1]] <= self.data[self.pointers[-1] + 1]
+        # )
+        pass
 
     def leftchild(self):
-        left_child = self.pointers[-1] * 2 + 1
-        if left_child < len(self.data):
-            self.pointers[-1] = left_child
+        if len(self.pointers) < self.data_len - 1:
+            left_child = self.pointers[-1] * 2 + 1
+            if left_child < len(self.data):
+                self.pointers[-1] = left_child
 
     def rightchild(self):
-        right_child = self.pointers[-1] * 2 + 2
-        if right_child < len(self.data):
-            self.pointers = right_child
+        if len(self.pointers) < self.data_len - 1:
+            right_child = self.pointers[-1] * 2 + 2
+            if right_child < len(self.data):
+                self.pointers[-1] = right_child
 
     def parent(self):
-        self.pointers[-1] = int((self.pointers[-1] - 1) / 2)
+        if len(self.pointers) < self.data_len - 1:
+            self.pointers[-1] = int((self.pointers[-1] - 1) / 2)
 
 
 if __name__ == "__main__":
@@ -308,19 +344,26 @@ if __name__ == "__main__":
     # wait_for_debugger()
 
     env = gym.make(
-        "rlad/bst-v0", render_mode="human", data_len=10, program_len=100
+        "rlad/bst-v0",
+        render_mode="human",
+        data_len=10,
+        program_len=100,
+        maximum_exec_cost=100,
+        verbosity=0,
     )
 
     check_env(env.unwrapped)
 
     model = PPO("MultiInputPolicy", env, verbose=1)
-    model.learn(total_timesteps=10_000)
+    model.learn(total_timesteps=10, progress_bar=True)
 
-    vec_env = model.get_env()
-    obs = vec_env.reset()
-    for _ in range(1000):
-        action, _states = model.predict(obs, deterministic=True)
-        obs, reward, done, info = vec_env.step(action)
-        vec_env.render()
+    print("Done")
+    # TODO: Does not make much sense before we know our model can learn
+    # vec_env = model.get_env()
+    # obs = vec_env.reset()
+    # for _ in range(1000):
+    #     action, _states = model.predict(obs, deterministic=True)
+    #     obs, reward, done, info = vec_env.step(action)
+    #     vec_env.render()
 
     env.close()
