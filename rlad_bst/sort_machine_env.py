@@ -165,7 +165,7 @@ class SortingMachine(gym.Env):
 
         terminated = np.array_equal(self.data, self.correct_tree)
         reward = calculate_reward(
-            solution_arr=self.correct_tree, dandidate_arr=self.data
+            solution_arr=self.correct_tree, candidate_arr=self.data
         )
         truncated = False  # Used to limit steps
 
