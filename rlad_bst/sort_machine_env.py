@@ -48,13 +48,18 @@ class SortingMachine(gym.Env):
             14: self.leftchild,
             15: self.rightchild,
             16: self.parent,
+            17: self.leftchildempty,
+            18: self.rightchildempty,
+            19: self.write,
+            20: self.nodeempty,
+            21: self.istreeend,
+            22: self.isnottreestart,
+            23: self.giveresult,
         }
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
 
-        # We need to pad the observation space
-        # TODO: Could give us problem if the data is too big
-        self.pad = 100  # np.iinfo(np.int64).max
+        self.pad = 0
 
         self.observation_space = gym.spaces.Dict(
             {
@@ -65,7 +70,7 @@ class SortingMachine(gym.Env):
                     dtype=np.int64,
                 ),  # np.array of size program_len
                 "data": spaces.Box(
-                    low=0, high=self.pad, shape=(data_len,), dtype=np.int64
+                    low=0, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "pointers": spaces.Box(
                     low=0, high=data_len, shape=(data_len,), dtype=np.int64
@@ -82,11 +87,17 @@ class SortingMachine(gym.Env):
                     3
                 ),  # np.int64 None (2), True (1), or False (0)
                 "execcost": spaces.Box(
-                    low=0, high=self.pad, shape=(1,), dtype=np.int64
+                    low=0, high=np.inf, shape=(1,), dtype=np.int64
                 ),  # np.int64
                 "storage": spaces.Box(
-                    low=0, high=self.pad, shape=(1,), dtype=np.int64
+                    low=0, high=np.inf, shape=(1,), dtype=np.int64
                 ),  # np.int64
+                "result": spaces.Box(
+                    low=0, high=np.inf, shape=(data_len,), dtype=np.int64
+                ),  # np.array of size data_len
+                "pointersresult": spaces.Box(
+                    low=0, high=data_len, shape=(data_len,), dtype=np.int64
+                ),  # np.array of size data_len
             }
         )
 
@@ -95,7 +106,7 @@ class SortingMachine(gym.Env):
 
     def _initial_machine_state(self):
         self.program: np.array = np.array([], dtype=np.int64)
-        self.data: list = np.array(list(range(self.data_len)))
+        self.data: np.array = np.array(list(range(self.data_len)))
         self.pointers: list = [0]
         self.stack: list = []
         self.skipflag: bool = False
@@ -104,6 +115,8 @@ class SortingMachine(gym.Env):
         self.lastconditional: int = 2
         self.execcost: int = 0
         self.storage: int = self.pad
+        self.result: np.array = np.zeros((len(self.data)), dtype=int)
+        self.pointersresult: list = [0]
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -135,12 +148,20 @@ class SortingMachine(gym.Env):
                 np.ones((self.data_len - len(self.pointers))) * self.data_len,
             )
         ).astype(np.int64)
+        pointersresult = np.concatenate(
+            (
+                self.pointersresult,
+                np.ones((self.data_len - len(self.pointersresult)))
+                * self.data_len,
+            )
+        ).astype(np.int64)
         stack = np.concatenate(
             (
                 self.stack,
                 np.ones((self.data_len - len(self.stack))) * self.program_len,
             )
         ).astype(np.int64)
+
         return {
             "program": program,
             "data": self.data,
@@ -152,6 +173,8 @@ class SortingMachine(gym.Env):
             "lastconditional": self.lastconditional,
             "execcost": np.array([self.execcost]),
             "storage": np.array([self.storage]),
+            "result": self.result,
+            "pointersresult": pointersresult,
         }
 
     def _get_info(self):
@@ -252,12 +275,16 @@ class SortingMachine(gym.Env):
             self.pointers[-1] -= 1
 
     def push(self):
-        if len(self.pointers) < self.data_len - 1:
-            self.pointers.append(self.pointers[-1])
+        print("push:", self.pointersresult[-1])
+        if len(self.pointersresult) < self.data_len - 1:
+            self.pointersresult.append(self.pointersresult[-1])
 
     def pop(self):
-        if len(self.pointers) > 1:
-            self.pointers.pop()
+        if len(self.pointersresult) > 1:
+            self.pointersresult.pop()
+
+    def pointernotempty(self):
+        self.skipflag = len(self.pointers) <= 1
 
     def compare(self):
         self.skipflag = self.data[self.pointers[-1]] <= self.storage
@@ -267,6 +294,7 @@ class SortingMachine(gym.Env):
             self.stack.append(self.commandpointer - 1)
 
     def jump(self):
+        print("jump")
         if len(self.stack) != 0:
             self.commandpointer = self.stack.pop()
 
@@ -276,7 +304,10 @@ class SortingMachine(gym.Env):
         self.data[self.pointers[-1]] = temp
 
     def isnotend(self):
-        self.skipflag = self.pointers[-1] >= len(self.data) - 1
+        self.skipflag = self.pointers[-1] > len(self.data) - 1
+
+    def isend(self):
+        self.skipflag = self.pointers[-1] <= len(self.data) - 1
 
     def isnotstart(self):
         self.skipflag = self.pointers[-1] == 0
@@ -285,46 +316,80 @@ class SortingMachine(gym.Env):
         if len(self.pointers) > 1:
             self.skipflag = self.pointers[-1] == self.pointers[-2]
 
-    def swapwithpointers(self):
-        if len(self.pointers) > 1:
-            temp = self.data[self.pointers[-2]]
-            self.data[self.pointers[-2]] = self.data[self.pointers[-1]]
-            self.data[self.pointers[-1]] = temp
-
     def drop(self):
         if len(self.stack) > 0:
             self.stack.pop()
         self.skipflag = False
 
     def swapright(self):
-        # TODO: Does not work with the new tree operation. Probably not needed
-        # temp = self.data[self.pointers[-1] + 1]
-        # self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
-        # self.data[self.pointers[-1]] = temp
-        pass
+        try:
+            temp = self.data[self.pointers[-1] + 1]
+            self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
+            self.data[self.pointers[-1]] = temp
+        except IndexError:
+            pass
 
     def compareright(self):
-        # TODO: Does not work with the new tree operation. Probably not needed
-        # self.skipflag = (
-        #     self.data[self.pointers[-1]] <= self.data[self.pointers[-1] + 1]
-        # )
-        pass
+        try:
+            self.skipflag = (
+                self.data[self.pointers[-1]]
+                <= self.data[self.pointers[-1] + 1]
+            )
+        except IndexError:
+            pass
 
     def leftchild(self):
-        if len(self.pointers) < self.data_len - 1:
-            left_child = self.pointers[-1] * 2 + 1
-            if left_child < len(self.data):
-                self.pointers[-1] = left_child
+        left_child = self.pointersresult[-1] * 2 + 1
+        print("left")
+        if left_child < len(self.data):
+            self.pointersresult[-1] = left_child
 
     def rightchild(self):
-        if len(self.pointers) < self.data_len - 1:
-            right_child = self.pointers[-1] * 2 + 2
-            if right_child < len(self.data):
-                self.pointers[-1] = right_child
+        right_child = self.pointersresult[-1] * 2 + 2
+        print("right")
+        if right_child < len(self.data):
+            self.pointersresult[-1] = right_child
+
+    def leftchildempty(self):
+        left_child = self.pointersresult[-1] * 2 + 1
+        if left_child >= len(self.data):
+            self.skipflag = 1
+        else:
+            print("leftempty", left_child)
+            self.skipflag = self.result[left_child] != 0
+
+    def rightchildempty(self):
+        right_child = self.pointersresult[-1] * 2 + 2
+        if right_child >= len(self.data):
+            self.skipflag = 1
+        else:
+            print("rightempty", right_child)
+            self.skipflag = self.result[right_child] != 0
+
+    def nodeempty(self):
+        self.skipflag = self.result[self.pointersresult[-1]] != 0
 
     def parent(self):
-        if len(self.pointers) < self.data_len - 1:
-            self.pointers[-1] = int((self.pointers[-1] - 1) / 2)
+        print("parent", int((self.pointersresult[-1] - 1) / 2))
+        if self.pointersresult[-1] != 0:
+            self.pointersresult[-1] = int((self.pointersresult[-1] - 1) / 2)
+
+    def write(self):
+        print("write", self.data[self.pointers[-1]])
+        self.result[self.pointersresult[-1]] = self.data[self.pointers[-1]]
+        self.right()
+
+    def istreeend(self):
+        self.skipflag = self.pointersresult[-1] * 2 + 1 <= len(self.data) - 1
+
+    def isnottreestart(self):
+        print(self.result)
+        print("isnottreestart", self.pointersresult[-1])
+        self.skipflag = self.pointersresult[-1] == 0
+
+    def giveresult(self):
+        print("here")
+        self.data = self.result
 
 
 if __name__ == "__main__":
