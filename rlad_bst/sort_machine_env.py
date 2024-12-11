@@ -7,7 +7,7 @@ from gymnasium.envs.registration import register
 from gymnasium.utils.env_checker import check_env
 from stable_baselines3 import PPO
 
-from .reward import calculate_reward
+from rlad_bst.reward import calculate_reward
 
 register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
 
