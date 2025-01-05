@@ -5,6 +5,8 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
+import wandb
+from rlad_bst.model import get_model
 from rlad_bst.reward import calculate_reward
 
 register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
@@ -263,6 +265,9 @@ class SortingMachine(gym.Env):
 
         if self.skipflag:
             self.skipflag = False
+            self.last_action = cmd
+        # If the last action was a conditional
+        # the current action can not be a conditional
         elif (
             cmd in self._conditional_actions
             and self.last_action in self._conditional_actions

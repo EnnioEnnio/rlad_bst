@@ -26,6 +26,7 @@ from wandb.integration.sb3 import WandbCallback
 # importing for env registration only
 import rlad_bst.sort_machine_env  # noqa: F401
 from rlad_bst.parser import load_config_from_yaml
+from rlad_bst.model import get_model
 
 
 def wait_for_debugger(port: int = 5678):
@@ -74,18 +75,17 @@ def main():
         )
         env = Monitor(env)
 
-        model = PPO(
-            "MultiInputPolicy",
+        model = get_model(
             env,
-            verbose=config.get("verbosity", 0),
-            tensorboard_log=f"runs/{run.id}",
+            config["verbosity"],
+            f"runs/{run.id}",
         )
         model.learn(
-            total_timesteps=config.get("total_timesteps"),
+            total_timesteps=config["total_timesteps"],
             callback=WandbCallback(
-                gradient_save_freq=config.get("gradient_save_freq"),
+                gradient_save_freq=config["gradient_save_freq"],
                 model_save_path=f"models/{run.id}",
-                verbose=config.get("verbosity"),
+                verbose=config["verbosity"],
             ),
         )
 

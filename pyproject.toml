@@ -14,6 +14,7 @@ tqdm = "^4.67.1"
 rich = "^13.9.4"
 wandb = "^0.19.1"
 tensorboard = "^2.18.0"
+transformers = "^4.47.1"
 
 
 [tool.poetry.group.dev.dependencies]
