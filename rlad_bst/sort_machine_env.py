@@ -2,6 +2,7 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
+import wandb
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 from gymnasium.utils.env_checker import check_env
@@ -9,7 +10,6 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from wandb.integration.sb3 import WandbCallback
 
-import wandb
 from rlad_bst.reward import calculate_reward
 
 register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
@@ -79,7 +79,7 @@ class SortingMachine(gym.Env):
 
         self.pad = 0
 
-        self.observation_space = gym.spaces.Dict(
+        self.observation_space = spaces.Dict(
             {
                 "program": spaces.Box(
                     low=0,
