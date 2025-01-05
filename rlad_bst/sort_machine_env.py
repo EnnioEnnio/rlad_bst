@@ -55,7 +55,12 @@ class SortingMachine(gym.Env):
             18: self.nodeempty,
             19: self.istreeend,
             20: self.isnottreestart,
-            # 23: self.giveresult,
+        }
+
+        # Inverse dict to make it human readable
+        self._command_to_action = {
+            cmd.__name__: action
+            for action, cmd in self._action_to_command.items()
         }
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
@@ -84,18 +89,12 @@ class SortingMachine(gym.Env):
                 ),  # np.array of size data_len
                 "skipflag": spaces.Discrete(2),  # np.int64 (0 or 1)
                 "commandpointer": spaces.Discrete(program_len + 1),  # np.int64
-                "lastcommand": spaces.Discrete(
+                "last_action": spaces.Discrete(
                     len(self._action_to_command) + 1
                 ),  # np.int64
-                # "lastconditional": spaces.Discrete(
-                #     3
-                # ),  # np.int64 None (2), True (1), or False (0)
                 "execcost": spaces.Box(
                     low=0, high=np.inf, shape=(1,), dtype=np.int64
                 ),  # np.int64
-                # "storage": spaces.Box(
-                #     low=0, high=np.inf, shape=(1,), dtype=np.int64
-                # ),  # np.int64
                 "result": spaces.Box(
                     low=0, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
@@ -115,12 +114,12 @@ class SortingMachine(gym.Env):
         self.stack: list = []
         self.skipflag: bool = False
         self.commandpointer: int = 0
-        self.lastcommand: int = len(self._action_to_command)
-        # self.lastconditional: int = 2
+        self.last_action: int = len(self._action_to_command)
         self.execcost: int = 0
-        # self.storage: int = self.pad
         self.result: np.array = np.ones_like(self.data, dtype=int) * self.pad
         self.pointersresult: list = [0]
+
+        self.invalid_action = False
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -173,10 +172,8 @@ class SortingMachine(gym.Env):
             "stack": stack,
             "skipflag": int(self.skipflag),
             "commandpointer": self.commandpointer,
-            "lastcommand": self.lastcommand,
-            # "lastconditional": self.lastconditional,
+            "last_action": self.last_action,
             "execcost": np.array([self.execcost]),
-            # "storage": np.array([self.storage]),
             "result": self.result,
             "pointersresult": pointersresult,
         }
@@ -211,11 +208,26 @@ class SortingMachine(gym.Env):
             1.3 The program has reached its maximum execution cost
         2. The machine awaits a new instruction
         """
+        # If we are at the start we only allow right, push, mark, swapright
+        if self.last_action == len(self._action_to_command):
+            self.invalid_action = action not in [
+                self._command_to_action["right"],
+                self._command_to_action["push"],
+                self._command_to_action["mark"],
+                self._command_to_action["swapright"],
+            ]
+        else:
+            # We do not allow the same action twice in a row
+            self.invalid_action = self.last_action == action
+
         self.program = np.append(self.program, action)
         terminated = self._check_terminated()
         truncated = self._check_trucated()
         while not (
-            terminated or truncated or self.commandpointer >= len(self.program)
+            terminated
+            or truncated
+            or self.commandpointer >= len(self.program)
+            or self.invalid_action
         ):
             self._transition_once()
             if self.verbosity >= 1:
@@ -223,12 +235,12 @@ class SortingMachine(gym.Env):
             terminated = self._check_terminated()
             truncated = self._check_trucated()
 
-        reward = (
-            calculate_reward(
-                solution_arr=self.correct_tree, candidate_arr=self.result
-            )
-            * self.execcost
+        reward = calculate_reward(
+            solution_arr=self.correct_tree, candidate_arr=self.result
         )
+        if self.invalid_action:
+            reward = -1000
+            truncated = True
 
         return (
             self._get_obs(),
@@ -240,10 +252,9 @@ class SortingMachine(gym.Env):
 
     def _transition_once(self):
         cmd = self.program[self.commandpointer]
-        self.lastcommand = cmd
+        self.last_action = cmd
         self.commandpointer += 1
 
-        # self.lastconditional = 2  # Set to None
         if self.skipflag:
             self.skipflag = False
         else:
@@ -258,8 +269,7 @@ class SortingMachine(gym.Env):
         print("stack: ", self.stack)
         print("skipflag: ", self.skipflag)
         print("commandpointer: ", self.commandpointer)
-        print("lastcommand: ", self.lastcommand)
-        # print("lastconditional: ", self.lastconditional)
+        print("last_action: ", self.last_action)
         print("execcost: ", self.execcost)
         print("---")
 
@@ -280,43 +290,52 @@ class SortingMachine(gym.Env):
     def right(self):
         if self.pointers[-1] < len(self.data) - 1:
             self.pointers[-1] += 1
+        else:
+            self.invalid_action = True
 
     def left(self):
         if self.pointers[-1] > 0:
             self.pointers[-1] -= 1
+        else:
+            self.invalid_action = True
 
     def push(self):
         if len(self.pointersresult) < self.data_len - 1:
             self.pointersresult.append(self.pointersresult[-1])
+        else:
+            self.invalid_action = True
 
     def pop(self):
         if len(self.pointersresult) > 1:
             self.pointersresult.pop()
-
-    def pointernotempty(self):
-        self.skipflag = len(self.pointers) <= 1
-
-    # def compare(self):
-    #     self.skipflag = self.data[self.pointers[-1]] <= self.storage
+        else:
+            self.invalid_action = True
 
     def mark(self):
         if len(self.stack) < self.data_len - 1:
             self.stack.append(self.commandpointer - 1)
+        else:
+            self.invalid_action = True
 
     def jump(self):
-        if len(self.stack) != 0:
+        # Check that prior to a jump a conditional is checked
+        if len(self.stack) != 0 and self.last_action in [
+            self._command_to_action["isnotend"],
+            self._command_to_action["isnotstart"],
+            self._command_to_action["isnotequal"],
+            self._command_to_action["compareright"],
+            self._command_to_action["leftchildempty"],
+            self._command_to_action["rightchildempty"],
+            self._command_to_action["nodeempty"],
+            self._command_to_action["istreeend"],
+            self._command_to_action["isnottreestart"],
+        ]:
             self.commandpointer = self.stack.pop()
-
-    # def swap(self):
-    #     temp = self.storage
-    #     self.storage = self.data[self.pointers[-1]]
-    #     self.data[self.pointers[-1]] = temp
+        else:
+            self.invalid_action = True
 
     def isnotend(self):
         self.skipflag = self.pointers[-1] > len(self.data) - 1
-
-    def isend(self):
-        self.skipflag = self.pointers[-1] <= len(self.data) - 1
 
     def isnotstart(self):
         self.skipflag = self.pointers[-1] == 0
@@ -324,19 +343,27 @@ class SortingMachine(gym.Env):
     def isnotequal(self):
         if len(self.pointers) > 1:
             self.skipflag = self.pointers[-1] == self.pointers[-2]
+        else:
+            self.invalid_action = True
 
     def drop(self):
         if len(self.stack) > 0:
             self.stack.pop()
-        self.skipflag = False
+            self.skipflag = False
+        else:
+            self.invalid_action = True
 
     def swapright(self):
-        try:
-            temp = self.data[self.pointers[-1] + 1]
-            self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
-            self.data[self.pointers[-1]] = temp
-        except IndexError:
-            pass
+        # Before swapping you need to compare
+        if self.last_action == self._command_to_action["compareright"]:
+            try:
+                temp = self.data[self.pointers[-1] + 1]
+                self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
+                self.data[self.pointers[-1]] = temp
+            except IndexError:
+                self.invalid_action = True
+        else:
+            self.invalid_action = True
 
     def compareright(self):
         try:
@@ -345,17 +372,21 @@ class SortingMachine(gym.Env):
                 <= self.data[self.pointers[-1] + 1]
             )
         except IndexError:
-            pass
+            self.invalid_action = True
 
     def leftchild(self):
         left_child = self.pointersresult[-1] * 2 + 1
         if left_child < len(self.data):
             self.pointersresult[-1] = left_child
+        else:
+            self.invalid_action = True
 
     def rightchild(self):
         right_child = self.pointersresult[-1] * 2 + 2
         if right_child < len(self.data):
             self.pointersresult[-1] = right_child
+        else:
+            self.invalid_action = True
 
     def leftchildempty(self):
         left_child = self.pointersresult[-1] * 2 + 1
@@ -378,6 +409,8 @@ class SortingMachine(gym.Env):
     def parent(self):
         if self.pointersresult[-1] != 0:
             self.pointersresult[-1] = int((self.pointersresult[-1] - 1) / 2)
+        else:
+            self.invalid_action = True
 
     def write(self):
         self.result[self.pointersresult[-1]] = self.data[self.pointers[-1]]
@@ -388,9 +421,6 @@ class SortingMachine(gym.Env):
 
     def isnottreestart(self):
         self.skipflag = self.pointersresult[-1] == 0
-
-    # def giveresult(self):
-    #     self.data = self.result
 
 
 # TODO: Would be nice in a different file:
@@ -417,9 +447,9 @@ if __name__ == "__main__":
         "verbosity": 0,
         "total_timesteps": 250000,
         "gradient_save_freq": 100,
-        "offline": True,
+        "offline": False,
         "debug": False,
-        "model_checkpoint": None,  # "models/x1vzt59t/model.zip"
+        "model_checkpoint": None,  # "models/vk3myzx0/model.zip"
     }
     if config["debug"]:
         wait_for_debugger()
