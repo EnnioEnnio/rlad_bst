@@ -63,6 +63,18 @@ class SortingMachine(gym.Env):
             for action, cmd in self._action_to_command.items()
         }
 
+        self._conditional_actions = [
+            self._command_to_action["isnotend"],
+            self._command_to_action["isnotstart"],
+            self._command_to_action["isnotequal"],
+            self._command_to_action["compareright"],
+            self._command_to_action["leftchildempty"],
+            self._command_to_action["rightchildempty"],
+            self._command_to_action["nodeempty"],
+            self._command_to_action["istreeend"],
+            self._command_to_action["isnottreestart"],
+        ]
+
         self.action_space = spaces.Discrete(len(self._action_to_command))
 
         self.pad = 0
@@ -252,14 +264,19 @@ class SortingMachine(gym.Env):
 
     def _transition_once(self):
         cmd = self.program[self.commandpointer]
-        self.last_action = cmd
         self.commandpointer += 1
 
         if self.skipflag:
             self.skipflag = False
+        elif (
+            cmd in self._conditional_actions
+            and self.last_action in self._conditional_actions
+        ):
+            self.invalid_action = True
         else:
             self.execcost += 1
             self._action_to_command[cmd]()
+            self.last_action = cmd
 
     def render(self):
         print("---")
@@ -306,7 +323,10 @@ class SortingMachine(gym.Env):
             self.invalid_action = True
 
     def pop(self):
-        if len(self.pointersresult) > 1:
+        if (
+            len(self.pointersresult) > 1
+            and self.last_action != self._command_to_action["push"]
+        ):
             self.pointersresult.pop()
         else:
             self.invalid_action = True
@@ -319,17 +339,10 @@ class SortingMachine(gym.Env):
 
     def jump(self):
         # Check that prior to a jump a conditional is checked
-        if len(self.stack) != 0 and self.last_action in [
-            self._command_to_action["isnotend"],
-            self._command_to_action["isnotstart"],
-            self._command_to_action["isnotequal"],
-            self._command_to_action["compareright"],
-            self._command_to_action["leftchildempty"],
-            self._command_to_action["rightchildempty"],
-            self._command_to_action["nodeempty"],
-            self._command_to_action["istreeend"],
-            self._command_to_action["isnottreestart"],
-        ]:
+        if (
+            len(self.stack) != 0
+            and self.last_action in self._conditional_actions
+        ):
             self.commandpointer = self.stack.pop()
         else:
             self.invalid_action = True
@@ -347,7 +360,10 @@ class SortingMachine(gym.Env):
             self.invalid_action = True
 
     def drop(self):
-        if len(self.stack) > 0:
+        if (
+            len(self.stack) > 0
+            and self.last_action != self._command_to_action["mark"]
+        ):
             self.stack.pop()
             self.skipflag = False
         else:
@@ -447,9 +463,9 @@ if __name__ == "__main__":
         "verbosity": 0,
         "total_timesteps": 250000,
         "gradient_save_freq": 100,
-        "offline": False,
-        "debug": False,
-        "model_checkpoint": None,  # "models/vk3myzx0/model.zip"
+        "offline": True,
+        "debug": True,
+        "model_checkpoint": None,  # "models/f7xfe339/model.zip"
     }
     if config["debug"]:
         wait_for_debugger()
