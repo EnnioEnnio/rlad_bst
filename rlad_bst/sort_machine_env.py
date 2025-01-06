@@ -2,10 +2,10 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
+import wandb
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
-import wandb
 from rlad_bst.model import get_model
 from rlad_bst.reward import calculate_reward
 
@@ -96,10 +96,17 @@ class SortingMachine(gym.Env):
                     shape=(data_len,),
                     dtype=np.int64,
                 ),  # np.array of size data_len
-                "skipflag": spaces.Discrete(2),  # np.int64 (0 or 1)
-                "commandpointer": spaces.Discrete(program_len + 1),  # np.int64
-                "last_action": spaces.Discrete(
-                    len(self._action_to_command) + 1
+                "skipflag": spaces.Box(
+                    low=0, high=2, shape=(1,), dtype=np.int64
+                ),  # np.int64 (0 or 1)
+                "commandpointer": spaces.Box(
+                    low=0, high=program_len + 1, shape=(1,), dtype=np.int64
+                ),  # np.int64
+                "last_action": spaces.Box(
+                    low=0,
+                    high=len(self._action_to_command),
+                    shape=(1,),
+                    dtype=np.int64,
                 ),  # np.int64
                 "execcost": spaces.Box(
                     low=0, high=np.inf, shape=(1,), dtype=np.int64
@@ -179,9 +186,9 @@ class SortingMachine(gym.Env):
             "data": self.data,
             "pointers": pointers,
             "stack": stack,
-            "skipflag": int(self.skipflag),
-            "commandpointer": self.commandpointer,
-            "last_action": self.last_action,
+            "skipflag": np.array([self.skipflag]),
+            "commandpointer": np.array([self.commandpointer]),
+            "last_action": np.array([self.last_action]),
             "execcost": np.array([self.execcost]),
             "result": self.result,
             "pointersresult": pointersresult,

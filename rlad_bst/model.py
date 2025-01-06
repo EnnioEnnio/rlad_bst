@@ -13,7 +13,7 @@ from transformers import AutoModel
 
 class CustomPPO(PPO):
     def __init__(self, *args, **kwargs):
-        super(CustomPPO, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -29,7 +29,7 @@ class CustomPPO(PPO):
 
 class CustomActorCriticPolicy(ActorCriticPolicy):
     def __init__(self, *args, **kwargs):
-        super(CustomActorCriticPolicy, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.action_dist = CustomCategoricalDistribution(self.action_space)
         self.action_net = self.action_dist.proba_distribution_net(
             latent_dim=self.mlp_extractor.latent_dim_pi
@@ -82,9 +82,7 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
 class CustomMultiInputActorCriticPolicy(CustomActorCriticPolicy):
     def __init__(self, *args, **kwargs):
-        super(CustomMultiInputActorCriticPolicy, self).__init__(
-            *args, **kwargs
-        )
+        super().__init__(*args, **kwargs)
 
 
 class CustomExtractor(nn.Module):
@@ -114,7 +112,7 @@ class CustomExtractor(nn.Module):
 
 class CustomCategoricalDistribution(CategoricalDistribution):
     def __init__(self, *args, **kwargs):
-        super(CustomCategoricalDistribution, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def proba_distribution_net(self, latent_dim: int) -> nn.Module:
         """
@@ -132,7 +130,7 @@ class CustomCategoricalDistribution(CategoricalDistribution):
 
 class CustomHead(nn.Module):
     def __init__(self, latent_dim: int, result_dim: int):
-        super(CustomHead, self).__init__()
+        super().__init__()
         self.value_net = nn.Sequential(
             nn.Linear(latent_dim, 128),
             nn.ReLU(),
