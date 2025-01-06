@@ -135,8 +135,6 @@ class SortingMachine(gym.Env):
         self.result: np.array = np.ones_like(self.data, dtype=int) * self.pad
         self.pointersresult: list = [0]
 
-        self.invalid_action = False
-
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
             if index >= len(result):
@@ -224,26 +222,12 @@ class SortingMachine(gym.Env):
             1.3 The program has reached its maximum execution cost
         2. The machine awaits a new instruction
         """
-        # If we are at the start we only allow right, push, mark, swapright
-        if self.last_action == len(self._action_to_command):
-            self.invalid_action = action not in [
-                self._command_to_action["right"],
-                self._command_to_action["push"],
-                self._command_to_action["mark"],
-                self._command_to_action["swapright"],
-            ]
-        else:
-            # We do not allow the same action twice in a row
-            self.invalid_action = self.last_action == action
 
         self.program = np.append(self.program, action)
         terminated = self._check_terminated()
         truncated = self._check_trucated()
         while not (
-            terminated
-            or truncated
-            or self.commandpointer >= len(self.program)
-            or self.invalid_action
+            terminated or truncated or self.commandpointer >= len(self.program)
         ):
             self._transition_once()
             if self.verbosity >= 1:
@@ -254,9 +238,6 @@ class SortingMachine(gym.Env):
         reward = calculate_reward(
             solution_arr=self.correct_tree, candidate_arr=self.result
         )
-        if self.invalid_action:
-            reward = -1000
-            truncated = True
 
         return (
             self._get_obs(),
@@ -272,18 +253,10 @@ class SortingMachine(gym.Env):
 
         if self.skipflag:
             self.skipflag = False
-            self.last_action = cmd
-        # If the last action was a conditional
-        # the current action can not be a conditional
-        elif (
-            cmd in self._conditional_actions
-            and self.last_action in self._conditional_actions
-        ):
-            self.invalid_action = True
         else:
             self.execcost += 1
             self._action_to_command[cmd]()
-            self.last_action = cmd
+        self.last_action = cmd
 
     def render(self):
         print("---")
@@ -309,34 +282,97 @@ class SortingMachine(gym.Env):
 
         return highlighted_str
 
+    def action_masks(self) -> np.array:
+        # If we are at the start we only allow right, push, mark, swapright
+        if self.last_action == len(self._action_to_command):
+            mask = np.zeros(len(self._action_to_command))
+            mask[
+                [
+                    self._command_to_action["right"],
+                    self._command_to_action["push"],
+                    self._command_to_action["mark"],
+                    self._command_to_action["compareright"],
+                    self._command_to_action["write"],
+                    self._command_to_action["leftchild"],
+                    self._command_to_action["rightchild"],
+                ]
+            ] = 1
+            return mask
+
+        mask = np.ones(len(self._action_to_command))
+        # We do not allow the same action twice in a row
+        mask[self.last_action] = 0
+
+        # If the last action was a conditional
+        # the current action can not be a conditional
+        if self.last_action in self._conditional_actions:
+            mask[self._conditional_actions] = 0
+
+        # Check for individual actions
+        if self.pointers[-1] == 0:
+            mask[[self._command_to_action["left"]]] = 0
+
+        elif self.pointers[-1] == len(self.data) - 1:
+            mask[
+                [
+                    self._command_to_action["right"],
+                    self._command_to_action["compareright"],
+                ]
+            ] = 0
+
+        if len(self.pointersresult) == self.data_len - 1:
+            mask[[self._command_to_action["push"]]] = 0
+
+        if (
+            len(self.pointersresult) == 1
+            or self.last_action == self._command_to_action["push"]
+        ):
+            mask[[self._command_to_action["pop"]]] = 0
+
+        if len(self.stack) == self.data_len - 1:
+            mask[[self._command_to_action["mark"]]] = 0
+
+        # Check that prior to a jump a conditional is checked
+        if (
+            len(self.stack) == 0
+            or self.last_action not in self._conditional_actions
+        ):
+            mask[[self._command_to_action["jump"]]] = 0
+
+        if len(self.pointers) == 1:
+            mask[[self._command_to_action["isnotequal"]]] = 0
+
+        if (
+            len(self.stack) == 0
+            or self.last_action == self._command_to_action["mark"]
+        ):
+            mask[[self._command_to_action["drop"]]] = 0
+
+        if self.last_action != self._command_to_action["compareright"]:
+            mask[[self._command_to_action["swapright"]]] = 0
+
+        if self.pointersresult[-1] == 0:
+            mask[[self._command_to_action["parent"]]] = 0
+
+        return mask
+
     # Available commands #
 
     def right(self):
         if self.pointers[-1] < len(self.data) - 1:
             self.pointers[-1] += 1
-        else:
-            self.invalid_action = True
 
     def left(self):
         if self.pointers[-1] > 0:
             self.pointers[-1] -= 1
-        else:
-            self.invalid_action = True
 
     def push(self):
         if len(self.pointersresult) < self.data_len - 1:
             self.pointersresult.append(self.pointersresult[-1])
-        else:
-            self.invalid_action = True
 
     def pop(self):
-        if (
-            len(self.pointersresult) > 1
-            and self.last_action != self._command_to_action["push"]
-        ):
+        if len(self.pointersresult) > 1:
             self.pointersresult.pop()
-        else:
-            self.invalid_action = True
 
     def mark(self):
         if len(self.stack) < self.data_len - 1:
@@ -345,14 +381,8 @@ class SortingMachine(gym.Env):
             self.invalid_action = True
 
     def jump(self):
-        # Check that prior to a jump a conditional is checked
-        if (
-            len(self.stack) != 0
-            and self.last_action in self._conditional_actions
-        ):
+        if len(self.stack) != 0:
             self.commandpointer = self.stack.pop()
-        else:
-            self.invalid_action = True
 
     def isnotend(self):
         self.skipflag = self.pointers[-1] > len(self.data) - 1
@@ -363,8 +393,6 @@ class SortingMachine(gym.Env):
     def isnotequal(self):
         if len(self.pointers) > 1:
             self.skipflag = self.pointers[-1] == self.pointers[-2]
-        else:
-            self.invalid_action = True
 
     def drop(self):
         if (
@@ -373,20 +401,15 @@ class SortingMachine(gym.Env):
         ):
             self.stack.pop()
             self.skipflag = False
-        else:
-            self.invalid_action = True
 
     def swapright(self):
         # Before swapping you need to compare
-        if self.last_action == self._command_to_action["compareright"]:
-            try:
-                temp = self.data[self.pointers[-1] + 1]
-                self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
-                self.data[self.pointers[-1]] = temp
-            except IndexError:
-                self.invalid_action = True
-        else:
-            self.invalid_action = True
+        try:
+            temp = self.data[self.pointers[-1] + 1]
+            self.data[self.pointers[-1] + 1] = self.data[self.pointers[-1]]
+            self.data[self.pointers[-1]] = temp
+        except IndexError:
+            pass
 
     def compareright(self):
         try:
@@ -395,21 +418,17 @@ class SortingMachine(gym.Env):
                 <= self.data[self.pointers[-1] + 1]
             )
         except IndexError:
-            self.invalid_action = True
+            pass
 
     def leftchild(self):
         left_child = self.pointersresult[-1] * 2 + 1
         if left_child < len(self.data):
             self.pointersresult[-1] = left_child
-        else:
-            self.invalid_action = True
 
     def rightchild(self):
         right_child = self.pointersresult[-1] * 2 + 2
         if right_child < len(self.data):
             self.pointersresult[-1] = right_child
-        else:
-            self.invalid_action = True
 
     def leftchildempty(self):
         left_child = self.pointersresult[-1] * 2 + 1
@@ -423,7 +442,6 @@ class SortingMachine(gym.Env):
         if right_child >= len(self.data):
             self.skipflag = 1
         else:
-
             self.skipflag = self.result[right_child] != 0
 
     def nodeempty(self):
@@ -432,8 +450,6 @@ class SortingMachine(gym.Env):
     def parent(self):
         if self.pointersresult[-1] != 0:
             self.pointersresult[-1] = int((self.pointersresult[-1] - 1) / 2)
-        else:
-            self.invalid_action = True
 
     def write(self):
         self.result[self.pointersresult[-1]] = self.data[self.pointers[-1]]

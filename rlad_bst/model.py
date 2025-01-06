@@ -3,36 +3,36 @@ from functools import partial
 import numpy as np
 import torch
 import torch.nn as nn
-from stable_baselines3 import PPO
-from stable_baselines3.common.distributions import CategoricalDistribution
-from stable_baselines3.common.policies import ActorCriticPolicy
+from sb3_contrib.common.maskable.distributions import (
+    MaskableCategoricalDistribution,
+)
+from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+from sb3_contrib.ppo_mask import MaskablePPO
 from stable_baselines3.common.torch_layers import CombinedExtractor
 from stable_baselines3.common.type_aliases import Schedule
 from transformers import AutoModel
 
 
-class CustomPPO(PPO):
+class CustomMaskablePPO(MaskablePPO):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def _setup_model(self) -> None:
         super()._setup_model()
-        self.policy = CustomMultiInputActorCriticPolicy(
+        self.policy = CustomMaskableActorCriticPolicy(
             self.observation_space,
             self.action_space,
             self.lr_schedule,
-            use_sde=self.use_sde,
             **self.policy_kwargs,
         )
         self.policy = self.policy.to(self.device)
 
 
-class CustomActorCriticPolicy(ActorCriticPolicy):
+class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.action_dist = CustomCategoricalDistribution(self.action_space)
-        self.action_net = self.action_dist.proba_distribution_net(
-            latent_dim=self.mlp_extractor.latent_dim_pi
+        self.action_dist = CustomMaskableCategoricalDistribution(
+            int(args[1].n)
         )
 
     def _build(self, lr_schedule: Schedule) -> None:
@@ -44,14 +44,11 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         """
         self.mlp_extractor = CustomExtractor(self.features_dim)
 
-        latent_dim_pi = self.mlp_extractor.latent_dim_pi
-
-        # We are using the CategoricalDistribution
         self.action_net = self.action_dist.proba_distribution_net(
-            latent_dim=latent_dim_pi
+            latent_dim=self.mlp_extractor.latent_dim_pi
         )
-
         self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
+
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
         if self.ortho_init:
@@ -75,14 +72,9 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         # Setup optimizer with initial learning rate
         self.optimizer = self.optimizer_class(
             self.parameters(),
-            lr=lr_schedule(1),
+            lr=lr_schedule(1),  # type: ignore[call-arg]
             **self.optimizer_kwargs,
         )
-
-
-class CustomMultiInputActorCriticPolicy(CustomActorCriticPolicy):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
 
 class CustomExtractor(nn.Module):
@@ -110,7 +102,7 @@ class CustomExtractor(nn.Module):
         return self.encoder(features.int()).pooler_output
 
 
-class CustomCategoricalDistribution(CategoricalDistribution):
+class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -149,7 +141,7 @@ def get_model(env, verbose, tensorboard_log):
     )
 
     # Create the model
-    model = CustomPPO(
+    model = CustomMaskablePPO(
         "MultiInputPolicy",
         env,
         verbose=verbose,

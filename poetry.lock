@@ -2133,6 +2133,20 @@ testing = ["h5py (>=3.7.0)", "huggingface-hub (>=0.12.1)", "hypothesis (>=6.70.2
 torch = ["safetensors[numpy]", "torch (>=1.10)"]
 
 [[package]]
+name = "sb3-contrib"
+version = "2.4.0"
+description = "Contrib package of Stable Baselines3, experimental code."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "sb3_contrib-2.4.0-py3-none-any.whl", hash = "sha256:725d90157028a94c69804f2e7332128518fb7cbab39e7e141d2d0355547a72ab"},
+    {file = "sb3_contrib-2.4.0.tar.gz", hash = "sha256:a3709d97ddd529c45e3d56a5ae7e61a380bb2e11bacb9a3e6951ac0c481350ca"},
+]
+
+[package.dependencies]
+stable-baselines3 = ">=2.4.0,<3.0"
+
+[[package]]
 name = "sentry-sdk"
 version = "2.19.2"
 description = "Python client for Sentry (https://sentry.io)"
@@ -2722,4 +2736,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12, !=3.12.5"
-content-hash = "a3dd2a1d75ed2f2e395b196cbced8c5527443791d8b79ec5a7ab5c6af4eddb6f"
+content-hash = "30ba0b83b9d5229db0951b482f977d9b39a7321d8886e8793ae0ff251aed887d"
