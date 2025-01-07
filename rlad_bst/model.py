@@ -150,3 +150,8 @@ def get_model(env, verbose, tensorboard_log):
         batch_size=256,
     )
     return model
+
+def load_from_checkpoint(path, env, verbose, tensorboard_log):
+    model = get_model(env, verbose, tensorboard_log)
+    model.set_parameters(path)
+    return model

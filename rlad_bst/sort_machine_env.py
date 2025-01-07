@@ -6,7 +6,6 @@ import wandb
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
-from rlad_bst.model import get_model
 from rlad_bst.reward import calculate_reward
 
 register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
@@ -55,21 +54,27 @@ class SortingMachine(gym.Env):
         }
 
         # Inverse dict to make it human readable
-        self._command_to_action = {
+        self._cmd_name_to_action_nr = {
             cmd.__name__: action
             for action, cmd in self._action_to_command.items()
         }
 
+        self._action_nr_to_cmd_name = {
+            action_nr: cmd_name
+            for cmd_name, action_nr in self._cmd_name_to_action_nr.items()
+        }
+
+
         self._conditional_actions = [
-            self._command_to_action["isnotend"],
-            self._command_to_action["isnotstart"],
-            self._command_to_action["isnotequal"],
-            self._command_to_action["compareright"],
-            self._command_to_action["leftchildempty"],
-            self._command_to_action["rightchildempty"],
-            self._command_to_action["nodeempty"],
-            self._command_to_action["istreeend"],
-            self._command_to_action["isnottreestart"],
+            self._cmd_name_to_action_nr["isnotend"],
+            self._cmd_name_to_action_nr["isnotstart"],
+            self._cmd_name_to_action_nr["isnotequal"],
+            self._cmd_name_to_action_nr["compareright"],
+            self._cmd_name_to_action_nr["leftchildempty"],
+            self._cmd_name_to_action_nr["rightchildempty"],
+            self._cmd_name_to_action_nr["nodeempty"],
+            self._cmd_name_to_action_nr["istreeend"],
+            self._cmd_name_to_action_nr["isnottreestart"],
         ]
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
@@ -288,13 +293,13 @@ class SortingMachine(gym.Env):
             mask = np.zeros(len(self._action_to_command))
             mask[
                 [
-                    self._command_to_action["right"],
-                    self._command_to_action["push"],
-                    self._command_to_action["mark"],
-                    self._command_to_action["compareright"],
-                    self._command_to_action["write"],
-                    self._command_to_action["leftchild"],
-                    self._command_to_action["rightchild"],
+                    self._cmd_name_to_action_nr["right"],
+                    self._cmd_name_to_action_nr["push"],
+                    self._cmd_name_to_action_nr["mark"],
+                    self._cmd_name_to_action_nr["compareright"],
+                    self._cmd_name_to_action_nr["write"],
+                    self._cmd_name_to_action_nr["leftchild"],
+                    self._cmd_name_to_action_nr["rightchild"],
                 ]
             ] = 1
             return mask
@@ -310,49 +315,60 @@ class SortingMachine(gym.Env):
 
         # Check for individual actions
         if self.pointers[-1] == 0:
-            mask[[self._command_to_action["left"]]] = 0
+            mask[[self._cmd_name_to_action_nr["left"]]] = 0
 
         elif self.pointers[-1] == len(self.data) - 1:
             mask[
                 [
-                    self._command_to_action["right"],
-                    self._command_to_action["compareright"],
+                    self._cmd_name_to_action_nr["right"],
+                    self._cmd_name_to_action_nr["compareright"],
                 ]
             ] = 0
 
         if len(self.pointersresult) == self.data_len - 1:
-            mask[[self._command_to_action["push"]]] = 0
+            mask[[self._cmd_name_to_action_nr["push"]]] = 0
 
         if (
             len(self.pointersresult) == 1
-            or self.last_action == self._command_to_action["push"]
+            or self.last_action == self._cmd_name_to_action_nr["push"]
         ):
-            mask[[self._command_to_action["pop"]]] = 0
+            mask[[self._cmd_name_to_action_nr["pop"]]] = 0
 
         if len(self.stack) == self.data_len - 1:
-            mask[[self._command_to_action["mark"]]] = 0
+            mask[[self._cmd_name_to_action_nr["mark"]]] = 0
 
         # Check that prior to a jump a conditional is checked
         if (
             len(self.stack) == 0
             or self.last_action not in self._conditional_actions
         ):
-            mask[[self._command_to_action["jump"]]] = 0
+            mask[[self._cmd_name_to_action_nr["jump"]]] = 0
 
         if len(self.pointers) == 1:
-            mask[[self._command_to_action["isnotequal"]]] = 0
+            mask[[self._cmd_name_to_action_nr["isnotequal"]]] = 0
 
         if (
             len(self.stack) == 0
-            or self.last_action == self._command_to_action["mark"]
+            or self.last_action == self._cmd_name_to_action_nr["mark"]
         ):
-            mask[[self._command_to_action["drop"]]] = 0
+            mask[[self._cmd_name_to_action_nr["drop"]]] = 0
 
-        if self.last_action != self._command_to_action["compareright"]:
-            mask[[self._command_to_action["swapright"]]] = 0
+        if self.last_action != self._cmd_name_to_action_nr["compareright"]:
+            mask[[self._cmd_name_to_action_nr["swapright"]]] = 0
 
         if self.pointersresult[-1] == 0:
-            mask[[self._command_to_action["parent"]]] = 0
+            mask[[self._cmd_name_to_action_nr["parent"]]] = 0
+
+        if self.pointersresult[-1] * 2 + 1 >= len(self.data):
+            mask[[
+                self._cmd_name_to_action_nr["leftchild"], 
+                self._cmd_name_to_action_nr["leftchildempty"],
+                self._cmd_name_to_action_nr["rightchild"],
+                self._cmd_name_to_action_nr["rightchildempty"],
+            ]] = 0
+
+        elif self.pointersresult[-1] * 2 + 2 >= len(self.data):
+            mask[[self._cmd_name_to_action_nr["rightchild"],self._cmd_name_to_action_nr["rightchildempty"]]] = 0
 
         return mask
 
@@ -397,7 +413,7 @@ class SortingMachine(gym.Env):
     def drop(self):
         if (
             len(self.stack) > 0
-            and self.last_action != self._command_to_action["mark"]
+            and self.last_action != self._cmd_name_to_action_nr["mark"]
         ):
             self.stack.pop()
             self.skipflag = False
