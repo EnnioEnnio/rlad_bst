@@ -186,7 +186,7 @@ class SortingMachine(gym.Env):
             "data": self.data,
             "pointers": pointers,
             "stack": stack,
-            "skipflag": np.array([self.skipflag]),
+            "skipflag": np.array([self.skipflag]).astype("int"),
             "commandpointer": np.array([self.commandpointer]),
             "last_action": np.array([self.last_action]),
             "execcost": np.array([self.execcost]),

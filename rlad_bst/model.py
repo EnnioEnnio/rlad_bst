@@ -122,7 +122,9 @@ class CustomCombinedExtractor(CombinedExtractor):
                 feature == -1, torch.tensor(0), feature + self.offset[i]
             )
             encoded_tensor_list.append(feature)
-            encoded_tensor_list.append(torch.ones((1, 1)))
+            encoded_tensor_list.append(
+                torch.ones((feature.shape[0], 1), device=feature.device)
+            )
         return torch.cat(encoded_tensor_list, dim=1)
 
 
