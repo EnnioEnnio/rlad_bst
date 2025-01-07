@@ -3,17 +3,22 @@ from functools import partial
 import numpy as np
 import torch
 import torch.nn as nn
+from gymnasium import spaces
 from sb3_contrib.common.maskable.distributions import (
     MaskableCategoricalDistribution,
 )
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from sb3_contrib.ppo_mask import MaskablePPO
 from stable_baselines3.common.torch_layers import CombinedExtractor
-from stable_baselines3.common.type_aliases import Schedule
+from stable_baselines3.common.type_aliases import Schedule, TensorDict
 from transformers import AutoModel
 
 
 class CustomMaskablePPO(MaskablePPO):
+    """
+    Custom maskable PPO model to change the policy networks
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -29,6 +34,10 @@ class CustomMaskablePPO(MaskablePPO):
 
 
 class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
+    """
+    Custom maskable policy with custom mlp extractor, action net and value net
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.action_dist = CustomMaskableCategoricalDistribution(
@@ -77,11 +86,60 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
         )
 
 
+class CustomCombinedExtractor(CombinedExtractor):
+    """
+    Custom combined extractor, which flattens the observation space into one
+    tensor including seperator tokens in between observations and adds a bias
+    to differing observations
+    """
+
+    def __init__(self, observation_space: spaces.Dict):
+        super().__init__(observation_space)
+        self._features_dim += len(observation_space) - 1
+        # TODO: Removed exec cost as they can be infinte in our current setup
+        # We order the features in a semantically meaningful way
+        self.custom_feature_order = [
+            "data",
+            "result",
+            "pointers",
+            "pointersresult",
+            "program",
+            "last_action",
+            "skipflag",
+            "commandpointer",
+            "stack",
+        ]
+        # The offset is the possible values of all previous features
+        # Beginning with the two special tokens
+        self.offset = [2, 2, 10, 10, 20, 20, 45, 47, 47]
+
+    def forward(self, observations: TensorDict) -> torch.Tensor:
+        encoded_tensor_list = []
+
+        for i, feature_name in enumerate(self.custom_feature_order):
+            feature = self.extractors[feature_name](observations[feature_name])
+            feature = torch.where(
+                feature == -1, torch.tensor(0), feature + self.offset[i]
+            )
+            encoded_tensor_list.append(feature)
+            encoded_tensor_list.append(torch.ones((1, 1)))
+        return torch.cat(encoded_tensor_list, dim=1)
+
+
 class CustomExtractor(nn.Module):
+    """
+    Custom mlp extractor which uses a BERT-style encoder-only Transformer
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(
             "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
+        )
+        # The embedding matrix of the model does not make sense for our model
+        # we will replace it by a embedding matrix of only 112 + 2 elements
+        self.encoder.embeddings.word_embeddings = nn.Embedding(
+            114, self.encoder.config.hidden_size
         )
         self.latent_dim_pi = self.encoder.config.hidden_size
         self.latent_dim_vf = self.encoder.config.hidden_size
@@ -93,16 +151,24 @@ class CustomExtractor(nn.Module):
         return latent, latent
 
     def forward_actor(self, features: torch.Tensor) -> torch.Tensor:
+
         return self.step(features)
 
     def forward_critic(self, features: torch.Tensor) -> torch.Tensor:
         return self.step(features)
 
     def step(self, features: torch.Tensor) -> torch.Tensor:
-        return self.encoder(features.int()).pooler_output
+        attention_mask = torch.where(
+            features == 0, torch.tensor(0), torch.tensor(1)
+        )
+        return self.encoder(features.int(), attention_mask).pooler_output
 
 
 class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
+    """
+    Custom maskable Categorical distribution to replace the action net
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -121,6 +187,10 @@ class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
 
 
 class CustomHead(nn.Module):
+    """
+    Custom head for the policy network
+    """
+
     def __init__(self, latent_dim: int, result_dim: int):
         super().__init__()
         self.value_net = nn.Sequential(
@@ -137,7 +207,7 @@ def get_model(env, verbose, tensorboard_log):
     policy_kwargs = dict(
         net_arch=dict(pi=[512, 256], vf=[512, 256]),
         activation_fn=nn.ReLU,
-        features_extractor_class=CombinedExtractor,
+        features_extractor_class=CustomCombinedExtractor,
     )
 
     # Create the model
@@ -150,6 +220,7 @@ def get_model(env, verbose, tensorboard_log):
         batch_size=256,
     )
     return model
+
 
 def load_from_checkpoint(path, env, verbose, tensorboard_log):
     model = get_model(env, verbose, tensorboard_log)

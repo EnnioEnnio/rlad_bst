@@ -26,7 +26,7 @@ from wandb.integration.sb3 import WandbCallback
 # importing for env registration only
 import rlad_bst.sort_machine_env  # noqa: F401
 from rlad_bst.parser import load_config_from_yaml
-from rlad_bst.model import get_model
+from rlad_bst.model import get_model, load_from_checkpoint
 
 
 def wait_for_debugger(port: int = 5678):
@@ -93,14 +93,23 @@ def main():
 
     else:
         # Otherwise, load a previously trained model
-        model = PPO.load(config.get("model_checkpoint"))
+        model = load_from_checkpoint(
+            config["model_checkpoint"], env, config["verbosity"], None
+        )
         obs, info = env.reset()
         terminated, truncated = False, False
         while not terminated and not truncated:
-            action, _states = model.predict(obs)
+            action, _states = model.predict(
+                obs,
+                deterministic=True,
+                action_masks=env.unwrapped.action_masks(),
+            )
             obs, reward, terminated, truncated, info = env.step(action)
             env.render()
-        print(obs["program"])
+        program = [
+            env.unwrapped._action_nr_to_cmd_name[cmd] for cmd in obs["program"]
+        ]
+        print("\n".join(program))
 
         env.close()
 

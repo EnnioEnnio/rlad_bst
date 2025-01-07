@@ -64,7 +64,6 @@ class SortingMachine(gym.Env):
             for cmd_name, action_nr in self._cmd_name_to_action_nr.items()
         }
 
-
         self._conditional_actions = [
             self._cmd_name_to_action_nr["isnotend"],
             self._cmd_name_to_action_nr["isnotstart"],
@@ -84,7 +83,7 @@ class SortingMachine(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "program": spaces.Box(
-                    low=0,
+                    low=-1,
                     high=len(self._action_to_command),
                     shape=(program_len,),
                     dtype=np.int64,
@@ -93,11 +92,11 @@ class SortingMachine(gym.Env):
                     low=0, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "pointers": spaces.Box(
-                    low=0, high=data_len + 1, shape=(data_len,), dtype=np.int64
+                    low=-1, high=data_len, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "stack": spaces.Box(
-                    low=0,
-                    high=program_len + 1,
+                    low=-1,
+                    high=program_len,
                     shape=(data_len,),
                     dtype=np.int64,
                 ),  # np.array of size data_len
@@ -120,7 +119,7 @@ class SortingMachine(gym.Env):
                     low=0, high=np.inf, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "pointersresult": spaces.Box(
-                    low=0, high=data_len + 1, shape=(data_len,), dtype=np.int64
+                    low=-1, high=data_len, shape=(data_len,), dtype=np.int64
                 ),  # np.array of size data_len
             }
         )
@@ -160,27 +159,25 @@ class SortingMachine(gym.Env):
         program = np.concatenate(
             (
                 self.program,
-                np.ones((self.program_len - len(self.program)))
-                * len(self._action_to_command),
+                np.ones((self.program_len - len(self.program))) * -1,
             )
         ).astype(np.int64)
         pointers = np.concatenate(
             (
                 self.pointers,
-                np.ones((self.data_len - len(self.pointers))) * self.data_len,
+                np.ones((self.data_len - len(self.pointers))) * -1,
             )
         ).astype(np.int64)
         pointersresult = np.concatenate(
             (
                 self.pointersresult,
-                np.ones((self.data_len - len(self.pointersresult)))
-                * self.data_len,
+                np.ones((self.data_len - len(self.pointersresult))) * -1,
             )
         ).astype(np.int64)
         stack = np.concatenate(
             (
                 self.stack,
-                np.ones((self.data_len - len(self.stack))) * self.program_len,
+                np.ones((self.data_len - len(self.stack))) * -1,
             )
         ).astype(np.int64)
 
@@ -360,15 +357,22 @@ class SortingMachine(gym.Env):
             mask[[self._cmd_name_to_action_nr["parent"]]] = 0
 
         if self.pointersresult[-1] * 2 + 1 >= len(self.data):
-            mask[[
-                self._cmd_name_to_action_nr["leftchild"], 
-                self._cmd_name_to_action_nr["leftchildempty"],
-                self._cmd_name_to_action_nr["rightchild"],
-                self._cmd_name_to_action_nr["rightchildempty"],
-            ]] = 0
+            mask[
+                [
+                    self._cmd_name_to_action_nr["leftchild"],
+                    self._cmd_name_to_action_nr["leftchildempty"],
+                    self._cmd_name_to_action_nr["rightchild"],
+                    self._cmd_name_to_action_nr["rightchildempty"],
+                ]
+            ] = 0
 
         elif self.pointersresult[-1] * 2 + 2 >= len(self.data):
-            mask[[self._cmd_name_to_action_nr["rightchild"],self._cmd_name_to_action_nr["rightchildempty"]]] = 0
+            mask[
+                [
+                    self._cmd_name_to_action_nr["rightchild"],
+                    self._cmd_name_to_action_nr["rightchildempty"],
+                ]
+            ] = 0
 
         return mask
 
