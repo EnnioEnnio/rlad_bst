@@ -1,5 +1,8 @@
 from typing import Optional
 
+import numpy as np
+from numpy.typing import NDArray
+
 
 class TreeNode:
     def __init__(self, val: int) -> None:
@@ -64,9 +67,14 @@ def count_subtree(node: TreeNode) -> int:
     return 1 + count_subtree(node.left) + count_subtree(node.right)
 
 
-def calculate_reward(solution_arr: list[int], candidate_arr: list[int]) -> int:
+def calculate_reward(
+    solution_arr: NDArray[np.int64], candidate_arr: NDArray[np.int64]
+) -> int:
+    # Since we pad the candidate array with 0
+    # we need to replace them with Nones
+    stripped_cand_array = np.where(candidate_arr == 0, None, candidate_arr)
     sol_tree = Tree.from_array(solution_arr)
-    cand_tree = Tree.from_array(candidate_arr)
+    cand_tree = Tree.from_array(stripped_cand_array)
 
     difference_score = compare_trees(sol_tree.root, cand_tree.root)
 
