@@ -30,33 +30,6 @@ class Tree:
         return cls(root=build_tree_from_array(0))
 
 
-def compare_trees_old(root_t1: TreeNode, root_t2: TreeNode) -> int:
-    """
-    Compare two trees and return a 'difference score'.
-    - High score means high difference (which is bad in our case)
-    The difference score is calculated as:
-    - If both nodes exist, difference = (0 if values match, else 1) + difference(left) + difference(right)
-    - If one node exists and the other doesn't, difference = 1 + (check the existing node's children as mismatches)
-    """  # noqa: E501
-    if root_t1 is None and root_t2 is None:
-        return 0  # Both empty, no penalty or reward
-    if root_t1 is None and root_t2 is not None:
-        # Penalty for extra nodes in the candidate tree
-        return 1 + count_subtree(root_t2)
-    if root_t1 is not None and root_t2 is None:
-        # Penalty for missing nodes in the candidate tree
-        return 1 + count_subtree(root_t1)
-
-    # Both nodes exist
-    diff = 0
-    if root_t1.val != root_t2.val:
-        diff += 1
-    # Compare children
-    diff += compare_trees_old(root_t1.left, root_t2.left)
-    diff += compare_trees_old(root_t1.right, root_t2.right)
-    return diff
-
-
 def compare_trees(root_t1: TreeNode, root_t2: TreeNode) -> int:
     """
     Compare two trees and return a reward score.
