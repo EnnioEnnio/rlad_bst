@@ -6,4 +6,4 @@ total_timesteps: 250000
 gradient_save_freq: 100
 offline: true
 debug: true
-model_checkpoint: null
+model_checkpoint: null # str | null
