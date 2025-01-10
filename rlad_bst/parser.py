@@ -1,3 +1,26 @@
+"""
+This module provides functionality for parsing configuration settings for a training run.
+
+It supports:
+1. Loading default configuration settings from a YAML file.
+2. Overriding specific configuration parameters via command-line arguments.
+
+Example:
+    `poetry run python3 train.py --config path/to/config.yaml --data-len 100`
+
+Command-Line Arguments:
+- `--config` (str, required): Path to the YAML configuration file.
+- `--data-len` (int, optional): Length of the dataset.
+- `--program-len` (int, optional): Length of the program.
+- `--maximum-exec-cost` (int, optional): Maximum execution cost allowed.
+- `--verbosity` (int, optional): Verbosity level of the program.
+- `--total-timesteps` (int, optional): Total number of timesteps for training.
+- `--gradient-save-freq` (int, optional): Frequency at which gradients are saved.
+- `--offline` (bool, optional): Whether the program runs offline.
+- `--debug` (bool, optional): Whether debugging is enabled.
+- `--model-checkpoint` (str, optional): Path to the model checkpoint file.
+"""  # noqa: E501
+
 import argparse
 
 import yaml
@@ -8,7 +31,7 @@ def parse_arguments() -> dict:
     Parse command-line arguments.
 
     Example usage:
-    `python3 train.py --config path/to/config.yaml -dl 100`
+    `poetry run python3 train.py --config path/to/config.yaml --data-len 100`
     """
 
     parser = argparse.ArgumentParser()

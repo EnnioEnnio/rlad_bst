@@ -1,3 +1,21 @@
+"""
+This script sets up and runs a reinforcement learning training pipeline using
+the Stable-Baselines3 (SB3) PPO algorithm and integrates with the
+Weights & Biases (wandb) library for experiment tracking.
+
+It leverages a custom environment registered under `rlad/bst-v0` and uses a
+configuration system that reads parameters from
+a YAML file and optionally overrides them with command-line arguments.
+
+Usage:
+1. **Train a New Model**:
+    `poetry run python3 train.py --config path/to/config.yaml`
+2. **Debug Mode**:
+    `poetry run python3 train.py --config path/to/config.yaml --debug true`
+3. **Run with Pre-Trained Model**:
+    `poetry run python3 train.py --config path/to/config.yaml --model-checkpoint path/to/model.zip`
+"""  # noqa: E501
+
 import gymnasium as gym
 import wandb
 from gymnasium.utils.env_checker import check_env
@@ -10,7 +28,6 @@ import rlad_bst.sort_machine_env  # noqa: F401
 from rlad_bst.parser import load_config_from_yaml
 
 
-# Test env
 def wait_for_debugger(port: int = 5678):
     """
     Pauses the program until a remote debugger is attached.
