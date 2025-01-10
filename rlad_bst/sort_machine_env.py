@@ -2,7 +2,6 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
-import wandb
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
