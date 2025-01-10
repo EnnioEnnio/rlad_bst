@@ -7,7 +7,7 @@ from gymnasium.envs.registration import register
 
 from rlad_bst.reward import calculate_reward
 
-register(id="rlad/bst-v0", entry_point="sort_machine_env:SortingMachine")
+register(id="rlad/bst-v0", entry_point="bst_sort_machine:SortingMachine")
 
 
 class SortingMachine(gym.Env):
