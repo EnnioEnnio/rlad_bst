@@ -22,8 +22,7 @@ from gymnasium.utils.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
 from wandb.integration.sb3 import WandbCallback
 
-# importing for env registration only
-import rlad_bst.sort_machine_env  # noqa: F401
+import rlad_bst.bst_sort_machine  # noqa: F401 # for env registration only
 from rlad_bst.model import get_model, load_from_checkpoint
 from rlad_bst.parser import load_config_from_yaml
 
