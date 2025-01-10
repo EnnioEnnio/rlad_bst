@@ -1,5 +1,6 @@
 import numpy as np
-from playground import Command, SortMachine, getcode
+
+from _examples.playground import Command, SortMachine, getcode
 
 
 def wait_for_debugger(port: int = 5678):
