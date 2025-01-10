@@ -30,7 +30,7 @@ class Tree:
         return cls(root=build_tree_from_array(0))
 
 
-def compare_trees(root_t1: TreeNode, root_t2: TreeNode) -> int:
+def compare_trees_old(root_t1: TreeNode, root_t2: TreeNode) -> int:
     """
     Compare two trees and return a 'difference score'.
     - High score means high difference (which is bad in our case)
@@ -39,12 +39,12 @@ def compare_trees(root_t1: TreeNode, root_t2: TreeNode) -> int:
     - If one node exists and the other doesn't, difference = 1 + (check the existing node's children as mismatches)
     """  # noqa: E501
     if root_t1 is None and root_t2 is None:
-        return 0  # Both empty, no difference
+        return 0  # Both empty, no penalty or reward
     if root_t1 is None and root_t2 is not None:
-        # Entire subtree t2 is extra
+        # Penalty for extra nodes in the candidate tree
         return 1 + count_subtree(root_t2)
     if root_t1 is not None and root_t2 is None:
-        # Entire subtree t1 is extra
+        # Penalty for missing nodes in the candidate tree
         return 1 + count_subtree(root_t1)
 
     # Both nodes exist
@@ -52,9 +52,41 @@ def compare_trees(root_t1: TreeNode, root_t2: TreeNode) -> int:
     if root_t1.val != root_t2.val:
         diff += 1
     # Compare children
-    diff += compare_trees(root_t1.left, root_t2.left)
-    diff += compare_trees(root_t1.right, root_t2.right)
+    diff += compare_trees_old(root_t1.left, root_t2.left)
+    diff += compare_trees_old(root_t1.right, root_t2.right)
     return diff
+
+
+def compare_trees(root_t1: TreeNode, root_t2: TreeNode) -> int:
+    """
+    Compare two trees and return a reward score.
+    Reward calculation:
+    - Matching values get +1 reward.
+    - Missing or mismatched values get a penalty:
+        - Incorrect value: -1 per node.
+        - Missing node: -2 per node.
+    Returns: int, the higher the greater is the similarity (+1 for each match)
+    """
+    if root_t1 is None and root_t2 is None:
+        return 0  # Both empty, no penalty or reward
+    if root_t1 is None:
+        # Penalty for extra nodes in the candidate tree
+        return 2 * -count_subtree(root_t2)
+    if root_t2 is None:
+        # Penalty for missing nodes in the candidate tree
+        return 2 * -count_subtree(root_t1)
+
+    # Both nodes exist
+    reward = 0
+    if root_t1.val == root_t2.val:
+        reward += 1  # Reward for matching node values
+    else:
+        reward -= 1  # Penalty for mismatched node values
+
+    # Recursively compare children
+    reward += compare_trees(root_t1.left, root_t2.left)
+    reward += compare_trees(root_t1.right, root_t2.right)
+    return reward
 
 
 def count_subtree(node: TreeNode) -> int:
@@ -76,12 +108,7 @@ def calculate_reward(
     sol_tree = Tree.from_array(solution_arr)
     cand_tree = Tree.from_array(stripped_cand_array)
 
-    difference_score = compare_trees(sol_tree.root, cand_tree.root)
-
-    # Reward could simply be the negative of the difference score
-    # The fewer the differences, the higher the reward.
-    reward = -difference_score
-    return reward
+    return compare_trees(sol_tree.root, cand_tree.root)
 
 
 # Example usage
@@ -90,4 +117,6 @@ if __name__ == "__main__":
     candidate = [8, 4, 12, 6, 2, 14, 10]
 
     reward = calculate_reward(solution, candidate)
+    print(f"Correct Solution: {solution}")
+    print(f"Model Solution: {candidate}")
     print("Reward:", reward)
