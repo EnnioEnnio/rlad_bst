@@ -1,0 +1,9 @@
+data_len: 7
+program_len: 64
+maximum_exec_cost: 128
+verbosity: 0
+total_timesteps: 250000
+gradient_save_freq: 100
+offline: true
+debug: true
+model_checkpoint: null # str | null

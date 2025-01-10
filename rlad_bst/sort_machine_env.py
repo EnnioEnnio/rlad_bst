@@ -2,13 +2,8 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
-import wandb
 from gymnasium import spaces
 from gymnasium.envs.registration import register
-from gymnasium.utils.env_checker import check_env
-from stable_baselines3 import PPO
-from stable_baselines3.common.monitor import Monitor
-from wandb.integration.sb3 import WandbCallback
 
 from rlad_bst.reward import calculate_reward
 
@@ -437,90 +432,3 @@ class SortingMachine(gym.Env):
 
     def isnottreestart(self):
         self.skipflag = self.pointersresult[-1] == 0
-
-
-# TODO: Would be nice in a different file:
-# 1 file for env, 1 for training, 1 for config
-if __name__ == "__main__":
-    # Test env
-    def wait_for_debugger(port: int = 5678):
-        """
-        Pauses the program until a remote debugger is attached.
-        Should only be called on rank0.
-        """
-
-        import debugpy
-
-        debugpy.listen(("0.0.0.0", port))
-        print(f"Waiting for client to attach on port {port}... ")
-        debugpy.wait_for_client()
-
-    # TODO: Make args
-    config = {
-        "data_len": 7,
-        "program_len": 64,  # Ours needs 51
-        "maximum_exec_cost": 128,  # Ours needs for 7 data points 82
-        "verbosity": 0,
-        "total_timesteps": 250000,
-        "gradient_save_freq": 100,
-        "offline": True,
-        "debug": True,
-        "model_checkpoint": None,  # "models/f7xfe339/model.zip"
-    }
-    if config["debug"]:
-        wait_for_debugger()
-
-    if config["offline"]:
-        import os
-
-        os.environ["WANDB_MODE"] = "dryrun"
-
-    env = gym.make(
-        "rlad/bst-v0",
-        render_mode="human",
-        data_len=config["data_len"],
-        program_len=config["program_len"],
-        maximum_exec_cost=config["maximum_exec_cost"],
-        verbosity=config["verbosity"],
-    )
-
-    check_env(env.unwrapped)
-
-    if not config["model_checkpoint"]:
-        run = wandb.init(
-            project="sb3",
-            config=config,
-            sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
-            monitor_gym=True,
-            save_code=True,
-        )
-        env = Monitor(env)
-
-        model = PPO(
-            "MultiInputPolicy",
-            env,
-            verbose=config["verbosity"],
-            tensorboard_log=f"runs/{run.id}",
-        )
-        model.learn(
-            total_timesteps=config["total_timesteps"],
-            callback=WandbCallback(
-                gradient_save_freq=config["gradient_save_freq"],
-                model_save_path=f"models/{run.id}",
-                verbose=config["verbosity"],
-            ),
-        )
-
-        run.finish()
-
-    else:
-        model = PPO.load(config["model_checkpoint"])
-        obs, info = env.reset()
-        terminated, truncated = False, False
-        while not terminated and not truncated:
-            action, _states = model.predict(obs)
-            obs, reward, terminated, truncated, info = env.step(action)
-            env.render()
-        print(obs["program"])
-
-        env.close()

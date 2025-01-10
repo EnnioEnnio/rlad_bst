@@ -36,3 +36,4 @@ target-version = ['py312']
 profile = "black"
 skip_gitignore = true
 line_length = 79
+known_third_party = "wandb"
