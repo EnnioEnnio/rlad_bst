@@ -80,6 +80,7 @@ def load_config_from_yaml() -> dict:
     """
     Loads a configuration stored in a config.yaml file and
     merges it with optional command-line arguments.
+
     Command-line arguments overwrite YAML values.
     """
     args = parse_arguments()
