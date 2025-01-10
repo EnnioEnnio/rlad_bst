@@ -77,8 +77,6 @@ class SortingMachine(gym.Env):
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
 
-        self.pad = 0
-
         self.observation_space = spaces.Dict(
             {
                 "program": spaces.Box(
@@ -135,7 +133,7 @@ class SortingMachine(gym.Env):
         self.commandpointer: int = 0
         self.last_action: int = len(self._action_to_command)
         self.execcost: int = 0
-        self.result: np.array = np.ones_like(self.data, dtype=int) * self.pad
+        self.result: np.array = np.zeros_like(self.data, dtype=int)
         self.pointersresult: list = [0]
 
     def _make_binary_tree(self):
