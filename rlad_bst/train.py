@@ -19,15 +19,20 @@ Usage:
 import gymnasium as gym
 import wandb
 from gymnasium.utils.env_checker import check_env
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.utils import set_random_seed
 from wandb.integration.sb3 import WandbCallback
 
 import rlad_bst.bst_sort_machine  # noqa: F401 # for env registration only
 from rlad_bst.model import get_model, load_from_checkpoint
 from rlad_bst.parser import load_config_from_yaml
 
+WANDB_PROJECT = "rlad_bst"
+WANDB_ENTITY = "rlad_bst"
 
-def wait_for_debugger(port: int = 5678):
+
+def wait_for_debugger(port: int = 56785):
     """
     Pauses the program until a remote debugger is attached.
     Should only be called on rank0.
@@ -42,6 +47,7 @@ def wait_for_debugger(port: int = 5678):
 
 def main():
     config: dict = load_config_from_yaml()
+    set_random_seed(42)
 
     if config.get("debug", False):
         wait_for_debugger()
@@ -58,6 +64,8 @@ def main():
         program_len=config.get("program_len", 64),
         maximum_exec_cost=config.get("maximum_exec_cost", 128),
         verbosity=config.get("verbosity", 0),
+        early_stop_delta=config.get("early_stop_delta", 0.01),
+        early_stop_patience=config.get("early_stop_patience", 5),
     )
 
     check_env(env.unwrapped)
@@ -65,7 +73,8 @@ def main():
     # If we do NOT have a model checkpoint, train a model
     if not config.get("model_checkpoint"):
         run = wandb.init(
-            project="sb3",
+            project=WANDB_PROJECT,
+            entity=WANDB_ENTITY,
             config=config,
             sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
             monitor_gym=True,
@@ -80,10 +89,19 @@ def main():
         )
         model.learn(
             total_timesteps=config["total_timesteps"],
-            callback=WandbCallback(
-                gradient_save_freq=config["gradient_save_freq"],
-                model_save_path=f"models/{run.id}",
-                verbose=config["verbosity"],
+            callback=CallbackList(
+                [
+                    WandbCallback(
+                        gradient_save_freq=config["gradient_save_freq"],
+                        model_save_path=f"models/{run.id}",
+                        verbose=config["verbosity"],
+                    ),
+                    CheckpointCallback(
+                        save_freq=10_000,
+                        save_path=f"/mnt/vast-nfs/rlad/checkpoints/{run.id}",
+                        name_prefix="rlad_bst",
+                    ),
+                ]
             ),
         )
 
@@ -96,6 +114,7 @@ def main():
         )
         obs, info = env.reset()
         terminated, truncated = False, False
+        c = 0
         while not terminated and not truncated:
             action, _states = model.predict(
                 obs,
@@ -103,11 +122,19 @@ def main():
                 action_masks=env.unwrapped.action_masks(),
             )
             obs, reward, terminated, truncated, info = env.step(action)
-            env.render()
+            print(env.unwrapped._action_nr_to_cmd_name[action.item()])
+            print(f"Reward: {reward}")
+            print(f"Result: {obs['result']}")
+            c += 1
         program = [
-            env.unwrapped._action_nr_to_cmd_name[cmd] for cmd in obs["program"]
+            env.unwrapped._action_nr_to_cmd_name[cmd] if cmd != -1 else "PAD"
+            for cmd in obs["program"]
         ]
         print("\n".join(program))
+        print(f"Reward: {reward}")
+        print(f"Terminated: {terminated}")
+        print(f"Truncated: {truncated}")
+        print(f"Result: {env.unwrapped.result}")
 
         env.close()
 

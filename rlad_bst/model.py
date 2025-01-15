@@ -219,7 +219,7 @@ def get_model(env, verbose, tensorboard_log):
         verbose=verbose,
         policy_kwargs=policy_kwargs,
         tensorboard_log=tensorboard_log,
-        batch_size=256,
+        batch_size=2048,
     )
     return model
 

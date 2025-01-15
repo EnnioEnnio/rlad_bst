@@ -5,7 +5,7 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
-from rlad_bst.reward import calculate_reward
+from rlad_bst.reward import calculate_reward, get_distance_matrix
 
 register(id="rlad/bst-v0", entry_point="bst_sort_machine:SortingMachine")
 
@@ -18,6 +18,8 @@ class SortingMachine(gym.Env):
         data_len,
         program_len,
         maximum_exec_cost,
+        early_stop_delta,
+        early_stop_patience,
         verbosity=1,
         render_mode=None,
     ):
@@ -26,6 +28,8 @@ class SortingMachine(gym.Env):
         self.render_mode = render_mode
         self.verbosity = verbosity
         self.maximum_exec_cost = maximum_exec_cost
+        self.early_stop_delta = early_stop_delta
+        self.early_stop_patience = early_stop_patience
 
         # Each command gets his own number
         self._action_to_command = {
@@ -123,6 +127,11 @@ class SortingMachine(gym.Env):
 
         self._initial_machine_state()
         self.correct_tree = self._make_binary_tree()
+        self.edge_distance_matrix = get_distance_matrix(self.data_len)
+        self.correct_positions = {
+            value: i for i, value in enumerate(self.correct_tree)
+        }
+        self.max_penalty = self.edge_distance_matrix.max() + 1
 
     def _initial_machine_state(self):
         self.program: np.array = np.array([], dtype=np.int64)
@@ -135,6 +144,11 @@ class SortingMachine(gym.Env):
         self.execcost: int = 0
         self.result: np.array = np.zeros_like(self.data, dtype=int)
         self.pointersresult: list = [0]
+
+        self.written_numbers = []
+        self.visited = np.zeros_like(self.data)
+        self.best_reward = 0
+        self.waits = 0
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -235,8 +249,20 @@ class SortingMachine(gym.Env):
             truncated = self._check_trucated()
 
         reward = calculate_reward(
-            solution_arr=self.correct_tree, candidate_arr=self.result
+            self.result,
+            self.edge_distance_matrix,
+            self.max_penalty,
+            self.visited,
+            self.correct_positions,
+            self.data_len,
         )
+
+        # If we terminate we give a bigger reward to
+        # compensate for the early stop
+        if terminated:
+            reward = self.program_len - len(self.program) + 1
+
+        # truncated = truncated or self.check_early_stop(reward)
 
         return (
             self._get_obs(),
@@ -257,6 +283,13 @@ class SortingMachine(gym.Env):
             self._action_to_command[cmd]()
         self.last_action = cmd
 
+    def check_early_stop(self, reward):
+        if reward - self.early_stop_delta > self.best_reward:
+            self.best_reward = reward
+            return False
+        self.waits += 1
+        return self.waits >= self.early_stop_patience
+
     def render(self):
         print("---")
         if self.verbosity >= 2:
@@ -265,7 +298,14 @@ class SortingMachine(gym.Env):
         print("stack: ", self.stack)
         print("skipflag: ", self.skipflag)
         print("commandpointer: ", self.commandpointer)
-        print("last_action: ", self.last_action)
+        print(
+            "last_action: ",
+            (
+                self._action_nr_to_cmd_name[self.last_action]
+                if self.last_action != len(self._action_to_command)
+                else "PAD"
+            ),
+        )
         print("execcost: ", self.execcost)
         print("---")
 
@@ -371,6 +411,12 @@ class SortingMachine(gym.Env):
                 ]
             ] = 0
 
+        if (
+            self.result[self.pointersresult[-1]] != 0
+            or self.data[self.pointers[-1]] in self.written_numbers
+        ):
+            mask[[self._cmd_name_to_action_nr["write"]]] = 0
+
         return mask
 
     # Available commands #
@@ -378,6 +424,7 @@ class SortingMachine(gym.Env):
     def right(self):
         if self.pointers[-1] < len(self.data) - 1:
             self.pointers[-1] += 1
+            self.visited[self.pointers[-1]] = 1
 
     def left(self):
         if self.pointers[-1] > 0:
@@ -470,6 +517,7 @@ class SortingMachine(gym.Env):
 
     def write(self):
         self.result[self.pointersresult[-1]] = self.data[self.pointers[-1]]
+        self.written_numbers.append(self.data[self.pointers[-1]])
         self.right()
 
     def istreeend(self):
