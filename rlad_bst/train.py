@@ -97,8 +97,8 @@ def main():
                         verbose=config["verbosity"],
                     ),
                     CheckpointCallback(
-                        save_freq=10_000,
-                        save_path=f"/mnt/vast-nfs/rlad/checkpoints/{run.id}",
+                        save_freq=100_000,
+                        save_path=f"checkpoints/{run.id}",
                         name_prefix="rlad_bst",
                     ),
                 ]

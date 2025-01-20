@@ -33,6 +33,8 @@ def get_distance_matrix(data_len: int) -> NDArray[np.int64]:
     for i in range(data_len):
         for j in range(data_len):
             edge_distance_matrix[i, j] = compute_edge_distance(i, j)
+    for i in range(data_len):
+        edge_distance_matrix[i, i] -= edge_distance_matrix.max() + 1
     return edge_distance_matrix
 
 
@@ -52,5 +54,8 @@ def calculate_reward(
             reward -= edge_distance_matrix[correct_positions[node], i]
     worst_case = max_penalty * data_len
     reward += visited.sum() * 0.1
-    reward = (reward + worst_case) / (worst_case + data_len * 0.1)
+    # We normalize by adding the maximum negative penalty to make it positive
+    # Then we divide by the maximum positive value, which is everything 
+    # visited => data_len * 0.1 + all correct worst_case + worst_case
+    reward = (reward + worst_case) / (2 * worst_case + data_len * 0.1)
     return reward
