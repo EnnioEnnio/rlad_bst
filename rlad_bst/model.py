@@ -135,6 +135,7 @@ class CustomExtractor(nn.Module):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
+        # TODO: change activation func
         self.encoder = AutoModel.from_pretrained(
             "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
         )
@@ -219,7 +220,7 @@ def get_model(env, verbose, tensorboard_log):
         verbose=verbose,
         policy_kwargs=policy_kwargs,
         tensorboard_log=tensorboard_log,
-        batch_size=256,
+        batch_size=1024,
     )
     return model
 

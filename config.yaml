@@ -2,8 +2,11 @@ data_len: 7
 program_len: 64
 maximum_exec_cost: 128
 verbosity: 0
-total_timesteps: 250000
+total_timesteps: 16_000_000
 gradient_save_freq: 100
-offline: true
-debug: true
-model_checkpoint: null # str | null
+offline: false
+debug: false
+model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
+
+early_stop_delta: 0.01
+early_stop_patience: 10
