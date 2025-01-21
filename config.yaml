@@ -1,12 +1,14 @@
-data_len: 7
+start_data_len: 1
+max_data_len: 7
 program_len: 64
 maximum_exec_cost: 128
 verbosity: 0
-total_timesteps: 16_000_000
+total_timesteps: 10_000_000
 gradient_save_freq: 100
 offline: false
 debug: false
-model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
+model_checkpoint: null #"checkpoints/5f82321l/130000_steps.zip" #"models/ohfmwinz/model.zip" # str | null
 
-early_stop_delta: 0.01
-early_stop_patience: 10
+delta: 0.01
+patience: 2
+eval_interval: 10_000

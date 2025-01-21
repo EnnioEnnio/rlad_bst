@@ -1,6 +1,6 @@
 import os
 import warnings
-from typing import Optional, Union
+from typing import Union
 
 import gymnasium as gym
 import numpy as np
@@ -73,9 +73,10 @@ class GrowDataLenCallback(BaseCallback):
     def _delete_previous_checkpoint_if_needed(
         self, mean_reward: float
     ) -> None:
-        if mean_reward > self.best_mean_reward + self.delta:
+        if mean_reward + self.delta > self.best_mean_reward:
             # The previous checkpoint was worse so we delete it
             if self.checkpoint_buffer is not None:
+                print("Deleting previous checkpoint: ", self.checkpoint_buffer)
                 os.remove(self.checkpoint_buffer)
 
     def _increase_data_len_if_needed(
@@ -86,16 +87,23 @@ class GrowDataLenCallback(BaseCallback):
         and the reward is not getting better.
         """
         if not len(episodes_terminated) == sum(episodes_terminated):
+            print("Not all episodes terminated: ", episodes_terminated)
             return
         if mean_reward > self.best_mean_reward + self.delta:
             self.best_mean_reward = mean_reward
             self.wait = 0
+            print("New best mean reward: ", mean_reward)
         else:
             self.wait += 1
+            print("Wait: ", self.wait)
             if self.wait >= self.patience:
                 self.wait = 0
                 self.model.get_env().env_method("increase_data_len")
-                self.eval_env.env_method("increase_data_len")
+                self.eval_env.unwrapped.increase_data_len()
+                print(
+                    "Data len increased to: ",
+                    self.model.get_env().get_attr("current_data_len"),
+                )
 
     def _checkpoint_path(
         self, checkpoint_type: str = "", extension: str = ""
@@ -116,7 +124,6 @@ def evaluate_policy(
     n_eval_episodes: int = 10,
     deterministic: bool = True,
     render: bool = False,
-    reward_threshold: Optional[float] = None,
     return_episode_terminated: bool = False,
     warn: bool = True,
 ) -> Union[tuple[float, float], tuple[list[float], list[int]]]:

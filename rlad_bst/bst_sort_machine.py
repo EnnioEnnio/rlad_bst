@@ -326,7 +326,7 @@ class SortingMachine(gym.Env):
                     self._cmd_name_to_action_nr["push"],
                     self._cmd_name_to_action_nr["mark"],
                     self._cmd_name_to_action_nr["compareright"],
-                    # self._cmd_name_to_action_nr["write"],
+                    self._cmd_name_to_action_nr["write"],
                     self._cmd_name_to_action_nr["leftchild"],
                     self._cmd_name_to_action_nr["rightchild"],
                 ]
