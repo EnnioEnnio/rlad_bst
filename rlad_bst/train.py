@@ -63,8 +63,8 @@ def main():
         "render_mode": "human",
         "max_data_len": config.get("max_data_len", 7),
         "start_data_len": config.get("start_data_len", 3),
-        "program_len": config.get("program_len", 64),
-        "maximum_exec_cost": config.get("maximum_exec_cost", 128),
+        "max_program_len_factor": config.get("max_program_len_factor", 10),
+        "max_exec_cost_factor": config.get("max_exec_cost_factor", 20),
         "verbosity": config.get("verbosity", 0),
     }
 
@@ -91,6 +91,8 @@ def main():
             env,
             config["verbosity"],
             f"runs/{run.id}",
+            config["batch_size"],
+            config["entropy_coefficient"],
         )
         model.learn(
             total_timesteps=config["total_timesteps"],
@@ -117,7 +119,12 @@ def main():
     else:
         # Otherwise, load a previously trained model
         model = load_from_checkpoint(
-            config["model_checkpoint"], env, config["verbosity"], None
+            config["model_checkpoint"],
+            env,
+            config["verbosity"],
+            None,
+            config["batch_size"],
+            0.0,
         )
         obs, info = env.reset()
         terminated, truncated = False, False

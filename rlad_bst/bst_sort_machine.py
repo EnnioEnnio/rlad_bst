@@ -17,17 +17,20 @@ class SortingMachine(gym.Env):
         self,
         max_data_len,
         start_data_len,
-        program_len,
-        maximum_exec_cost,
+        max_program_len_factor,
+        max_exec_cost_factor,
         verbosity=1,
         render_mode=None,
     ):
         self.max_data_len = max_data_len
         self.current_data_len = start_data_len
-        self.program_len = program_len
+        self.max_program_len_factor = max_program_len_factor
         self.render_mode = render_mode
         self.verbosity = verbosity
-        self.maximum_exec_cost = maximum_exec_cost
+        self.max_exec_cost_factor = max_exec_cost_factor
+        self.overall_max_program_len = (
+            self.max_program_len_factor * self.max_data_len
+        )
 
         self.pad_value = -1
 
@@ -86,7 +89,7 @@ class SortingMachine(gym.Env):
                 "program": spaces.Box(
                     low=-1,
                     high=len(self._action_to_command),
-                    shape=(program_len,),
+                    shape=(self.overall_max_program_len,),
                     dtype=np.int64,
                 ),  # np.array of size program_len
                 "data": spaces.Box(
@@ -100,7 +103,7 @@ class SortingMachine(gym.Env):
                 ),  # np.array of size max_data_len
                 "stack": spaces.Box(
                     low=-1,
-                    high=program_len,
+                    high=self.overall_max_program_len,
                     shape=(max_data_len,),
                     dtype=np.int64,
                 ),  # np.array of size data_len
@@ -108,7 +111,10 @@ class SortingMachine(gym.Env):
                     low=0, high=2, shape=(1,), dtype=np.int64
                 ),  # np.int64 (0 or 1)
                 "commandpointer": spaces.Box(
-                    low=0, high=program_len + 1, shape=(1,), dtype=np.int64
+                    low=0,
+                    high=self.overall_max_program_len + 1,
+                    shape=(1,),
+                    dtype=np.int64,
                 ),  # np.int64
                 "last_action": spaces.Box(
                     low=0,
@@ -156,8 +162,10 @@ class SortingMachine(gym.Env):
 
         self.written_numbers = []
         self.visited = np.zeros_like(self.data)
-        self.best_reward = 0
-        self.waits = 0
+        self.maximum_exec_cost = (
+            self.max_exec_cost_factor * self.current_data_len
+        )
+        self.program_len = self.max_program_len_factor * self.current_data_len
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -184,7 +192,7 @@ class SortingMachine(gym.Env):
         ).astype(np.int64)
 
     def _get_obs(self) -> dict:
-        program = self._pad_ob(self.program, self.program_len)
+        program = self._pad_ob(self.program, self.overall_max_program_len)
         pointers = self._pad_ob(self.pointers, self.max_data_len)
         pointersresult = self._pad_ob(self.pointersresult, self.max_data_len)
         stack = self._pad_ob(self.stack, self.max_data_len)

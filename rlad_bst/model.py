@@ -205,7 +205,7 @@ class CustomHead(nn.Module):
         return self.value_net(latent)
 
 
-def get_model(env, verbose, tensorboard_log):
+def get_model(env, verbose, tensorboard_log, batch_size, ent_coef):
     policy_kwargs = dict(
         net_arch=dict(pi=[512, 256], vf=[512, 256]),
         activation_fn=nn.ReLU,
@@ -219,12 +219,15 @@ def get_model(env, verbose, tensorboard_log):
         verbose=verbose,
         policy_kwargs=policy_kwargs,
         tensorboard_log=tensorboard_log,
-        batch_size=1024,
+        batch_size=batch_size,
+        ent_coef=ent_coef,
     )
     return model
 
 
-def load_from_checkpoint(path, env, verbose, tensorboard_log):
-    model = get_model(env, verbose, tensorboard_log)
+def load_from_checkpoint(
+    path, env, verbose, tensorboard_log, batch_size, ent_coef
+):
+    model = get_model(env, verbose, tensorboard_log, batch_size, ent_coef)
     model.set_parameters(path)
     return model

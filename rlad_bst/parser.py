@@ -46,19 +46,25 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
-        "--data-len",
+        "--start-data-len",
         type=int,
         required=False,
     )
 
     parser.add_argument(
-        "--program-len",
+        "--max-data-len",
         type=int,
         required=False,
     )
 
     parser.add_argument(
-        "--maximum-exec-cost",
+        "--max-program-len-factor",
+        type=int,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--max-exec-cost-factor",
         type=int,
         required=False,
     )
@@ -94,6 +100,36 @@ def parse_arguments() -> dict:
         type=str,
         required=False,
         help="Absolute path (str) to model checkpoint",
+    )
+
+    parser.add_argument(
+        "--entropy-coefficient",
+        type=float,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--eval-interval",
+        type=int,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--patience",
+        type=int,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--delta",
+        type=float,
+        required=False,
     )
 
     return vars(parser.parse_args())

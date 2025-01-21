@@ -38,7 +38,7 @@ class GrowDataLenCallback(BaseCallback):
 
         # Evaluation in an early stopping fashion
         self.best_mean_reward = -np.inf
-        self.best_mean_ep_length = -np.inf
+        self.last_save_reward = -np.inf
         self.patience = patience
         self.delta = delta
         self.wait = 0
@@ -73,11 +73,12 @@ class GrowDataLenCallback(BaseCallback):
     def _delete_previous_checkpoint_if_needed(
         self, mean_reward: float
     ) -> None:
-        if mean_reward + self.delta > self.best_mean_reward:
+        if mean_reward + self.delta > self.last_save_reward:
             # The previous checkpoint was worse so we delete it
             if self.checkpoint_buffer is not None:
                 print("Deleting previous checkpoint: ", self.checkpoint_buffer)
                 os.remove(self.checkpoint_buffer)
+            self.last_save_reward = mean_reward
 
     def _increase_data_len_if_needed(
         self, mean_reward: float, episodes_terminated: float
@@ -98,6 +99,7 @@ class GrowDataLenCallback(BaseCallback):
             print("Wait: ", self.wait)
             if self.wait >= self.patience:
                 self.wait = 0
+                self.best_mean_reward = mean_reward
                 self.model.get_env().env_method("increase_data_len")
                 self.eval_env.unwrapped.increase_data_len()
                 print(
