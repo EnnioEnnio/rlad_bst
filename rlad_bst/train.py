@@ -19,12 +19,13 @@ Usage:
 import gymnasium as gym
 import wandb
 from gymnasium.utils.env_checker import check_env
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.utils import set_random_seed
 from wandb.integration.sb3 import WandbCallback
 
 import rlad_bst.bst_sort_machine  # noqa: F401 # for env registration only
+from rlad_bst.helpers import GrowDataLenCallback
 from rlad_bst.model import get_model, load_from_checkpoint
 from rlad_bst.parser import load_config_from_yaml
 
@@ -57,16 +58,19 @@ def main():
 
         os.environ["WANDB_MODE"] = "dryrun"
 
-    env = gym.make(
-        "rlad/bst-v0",
-        render_mode="human",
-        data_len=config.get("data_len", 7),
-        program_len=config.get("program_len", 64),
-        maximum_exec_cost=config.get("maximum_exec_cost", 128),
-        verbosity=config.get("verbosity", 0),
-        early_stop_delta=config.get("early_stop_delta", 0.01),
-        early_stop_patience=config.get("early_stop_patience", 5),
-    )
+    env_config = {
+        "id": "rlad/bst-v0",
+        "render_mode": "human",
+        "max_data_len": config.get("max_data_len", 7),
+        "start_data_len": config.get("start_data_len", 3),
+        "program_len": config.get("program_len", 64),
+        "maximum_exec_cost": config.get("maximum_exec_cost", 128),
+        "verbosity": config.get("verbosity", 0),
+    }
+
+    env = gym.make(**env_config)
+
+    eval_env = gym.make(**env_config)
 
     check_env(env.unwrapped)
 
@@ -81,6 +85,7 @@ def main():
             save_code=True,
         )
         env = Monitor(env)
+        eval_env = Monitor(eval_env)
 
         model = get_model(
             env,
@@ -96,10 +101,12 @@ def main():
                         model_save_path=f"models/{run.id}",
                         verbose=config["verbosity"],
                     ),
-                    CheckpointCallback(
-                        save_freq=100_000,
-                        save_path=f"checkpoints/{run.id}",
-                        name_prefix="rlad_bst",
+                    GrowDataLenCallback(
+                        n_steps=config["eval_interval"],
+                        eval_env=eval_env,
+                        patience=config["patience"],
+                        delta=config["delta"],
+                        checkpoint_path=f"checkpoints/{run.id}",
                     ),
                 ]
             ),

@@ -135,7 +135,6 @@ class CustomExtractor(nn.Module):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        # TODO: change activation func
         self.encoder = AutoModel.from_pretrained(
             "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
         )
