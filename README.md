@@ -62,5 +62,32 @@ after cloning the repository to your User Folder, you can install the dependenci
 poetry install
 ```
 
-### Running the script
-see [Using the script](#using-the-script)
+### Running the script on the VM
+Create tmux session
+
+```bash
+tmux new -s mysession
+````
+
+run the script
+ > see [Using the script](#using-the-script)
+
+detach from the tmux session
+```bash
+Ctrl-b d
+```
+
+reattach to the tmux session
+```bash
+tmux attach -t mysession
+```
+
+If you forget the session name, list all sessions:
+```bash
+tmux ls
+````
+
+Kill the session
+```bash
+tmux kill-session -t mysession
+```
