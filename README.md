@@ -93,6 +93,7 @@ tmux kill-session -t mysession
 ```
 
 ## Starting a WandB-sweep
+> Note: On the VM, you might have to run every command with `poetry run` in front of it. You can also start a poetry shell for that... 
 Initialize a sweep:
 ```bash
 wandb sweep sweep-config.yaml
