@@ -1,0 +1,22 @@
+program: rlad_bst/train.py
+
+method: bayes  # or 'random' or 'grid'
+metric:
+  name: ep_rew_mean
+  goal: maximize
+
+command:
+  - poetry
+  - run
+  - python3
+  - rlad_bst/train.py
+  - --config
+  - config.yaml
+  - --entropy-coefficient
+  - ${entropy_coefficient}
+
+parameters:
+  entropy_coefficient:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
