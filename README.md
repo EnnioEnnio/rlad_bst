@@ -91,3 +91,19 @@ Kill the session
 ```bash
 tmux kill-session -t mysession
 ```
+
+## Starting a WandB-sweep
+Initialize a sweep:
+```bash
+wandb sweep sweep-config.yaml
+````
+
+Run the agent (also pops up in the terminal output):
+```bash
+wandb agent rlad_bst/rlad_bst/your_sweep_id
+```
+
+The agent now launches your program, passing parameters to tune, e.g.:
+```bash
+poetry run python3 rlad_bst/train.py --config=config.yaml --entropy_coefficient=<some_value>
+```
