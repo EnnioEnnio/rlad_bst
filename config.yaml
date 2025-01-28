@@ -1,12 +1,16 @@
-data_len: 7
-program_len: 64
-maximum_exec_cost: 128
+start_data_len: 2
+max_data_len: 7
+max_program_len_factor: 10
+max_exec_cost_factor: 20
 verbosity: 0
-total_timesteps: 16_000_000
+total_timesteps: 10_000_000
 gradient_save_freq: 100
 offline: false
 debug: false
+batch_size: 256
 model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
+entropy_coefficient: 0.01
 
-early_stop_delta: 0.01
-early_stop_patience: 10
+delta: 0.01
+patience: 2
+eval_interval: 10_000

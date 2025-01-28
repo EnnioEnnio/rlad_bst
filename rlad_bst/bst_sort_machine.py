@@ -15,21 +15,24 @@ class SortingMachine(gym.Env):
 
     def __init__(
         self,
-        data_len,
-        program_len,
-        maximum_exec_cost,
-        early_stop_delta,
-        early_stop_patience,
+        max_data_len,
+        start_data_len,
+        max_program_len_factor,
+        max_exec_cost_factor,
         verbosity=1,
         render_mode=None,
     ):
-        self.data_len = data_len
-        self.program_len = program_len
+        self.max_data_len = max_data_len
+        self.current_data_len = start_data_len
+        self.max_program_len_factor = max_program_len_factor
         self.render_mode = render_mode
         self.verbosity = verbosity
-        self.maximum_exec_cost = maximum_exec_cost
-        self.early_stop_delta = early_stop_delta
-        self.early_stop_patience = early_stop_patience
+        self.max_exec_cost_factor = max_exec_cost_factor
+        self.overall_max_program_len = (
+            self.max_program_len_factor * self.max_data_len
+        )
+
+        self.pad_value = -1
 
         # Each command gets his own number
         self._action_to_command = {
@@ -86,26 +89,32 @@ class SortingMachine(gym.Env):
                 "program": spaces.Box(
                     low=-1,
                     high=len(self._action_to_command),
-                    shape=(program_len,),
+                    shape=(self.overall_max_program_len,),
                     dtype=np.int64,
                 ),  # np.array of size program_len
                 "data": spaces.Box(
-                    low=0, high=np.inf, shape=(data_len,), dtype=np.int64
-                ),  # np.array of size data_len
+                    low=-1, high=np.inf, shape=(max_data_len,), dtype=np.int64
+                ),  # np.array of size max_data_len
                 "pointers": spaces.Box(
-                    low=-1, high=data_len, shape=(data_len,), dtype=np.int64
-                ),  # np.array of size data_len
+                    low=-1,
+                    high=max_data_len,
+                    shape=(max_data_len,),
+                    dtype=np.int64,
+                ),  # np.array of size max_data_len
                 "stack": spaces.Box(
                     low=-1,
-                    high=program_len,
-                    shape=(data_len,),
+                    high=self.overall_max_program_len,
+                    shape=(max_data_len,),
                     dtype=np.int64,
                 ),  # np.array of size data_len
                 "skipflag": spaces.Box(
                     low=0, high=2, shape=(1,), dtype=np.int64
                 ),  # np.int64 (0 or 1)
                 "commandpointer": spaces.Box(
-                    low=0, high=program_len + 1, shape=(1,), dtype=np.int64
+                    low=0,
+                    high=self.overall_max_program_len + 1,
+                    shape=(1,),
+                    dtype=np.int64,
                 ),  # np.int64
                 "last_action": spaces.Box(
                     low=0,
@@ -117,25 +126,24 @@ class SortingMachine(gym.Env):
                     low=0, high=np.inf, shape=(1,), dtype=np.int64
                 ),  # np.int64
                 "result": spaces.Box(
-                    low=0, high=np.inf, shape=(data_len,), dtype=np.int64
+                    low=-1, high=np.inf, shape=(max_data_len,), dtype=np.int64
                 ),  # np.array of size data_len
                 "pointersresult": spaces.Box(
-                    low=-1, high=data_len, shape=(data_len,), dtype=np.int64
+                    low=-1,
+                    high=max_data_len,
+                    shape=(max_data_len,),
+                    dtype=np.int64,
                 ),  # np.array of size data_len
             }
         )
 
         self._initial_machine_state()
-        self.correct_tree = self._make_binary_tree()
-        self.edge_distance_matrix = get_distance_matrix(self.data_len)
-        self.correct_positions = {
-            value: i for i, value in enumerate(self.correct_tree)
-        }
-        self.max_penalty = self.edge_distance_matrix.max() + 1
 
     def _initial_machine_state(self):
         self.program: np.array = np.array([], dtype=np.int64)
-        self.data: np.array = np.array(list(range(1, self.data_len + 1)))
+        self.data: np.array = np.array(
+            list(range(1, self.current_data_len + 1))
+        )
         self.pointers: list = [0]
         self.stack: list = []
         self.skipflag: bool = False
@@ -145,10 +153,19 @@ class SortingMachine(gym.Env):
         self.result: np.array = np.zeros_like(self.data, dtype=int)
         self.pointersresult: list = [0]
 
+        self.correct_tree = self._make_binary_tree()
+        self.edge_distance_matrix = get_distance_matrix(self.current_data_len)
+        self.correct_positions = {
+            value: i for i, value in enumerate(self.correct_tree)
+        }
+        self.max_penalty = self.edge_distance_matrix.max() + 1
+
         self.written_numbers = []
         self.visited = np.zeros_like(self.data)
-        self.best_reward = 0
-        self.waits = 0
+        self.maximum_exec_cost = (
+            self.max_exec_cost_factor * self.current_data_len
+        )
+        self.program_len = self.max_program_len_factor * self.current_data_len
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -166,42 +183,32 @@ class SortingMachine(gym.Env):
         in_order(0, sorted_tree, output_tree)
         return np.array(output_tree)
 
-    def _get_obs(self) -> dict:
-        program = np.concatenate(
+    def _pad_ob(self, ob, max_length):
+        return np.concatenate(
             (
-                self.program,
-                np.ones((self.program_len - len(self.program))) * -1,
-            )
-        ).astype(np.int64)
-        pointers = np.concatenate(
-            (
-                self.pointers,
-                np.ones((self.data_len - len(self.pointers))) * -1,
-            )
-        ).astype(np.int64)
-        pointersresult = np.concatenate(
-            (
-                self.pointersresult,
-                np.ones((self.data_len - len(self.pointersresult))) * -1,
-            )
-        ).astype(np.int64)
-        stack = np.concatenate(
-            (
-                self.stack,
-                np.ones((self.data_len - len(self.stack))) * -1,
+                ob,
+                np.ones((max_length - len(ob))) * self.pad_value,
             )
         ).astype(np.int64)
 
+    def _get_obs(self) -> dict:
+        program = self._pad_ob(self.program, self.overall_max_program_len)
+        pointers = self._pad_ob(self.pointers, self.max_data_len)
+        pointersresult = self._pad_ob(self.pointersresult, self.max_data_len)
+        stack = self._pad_ob(self.stack, self.max_data_len)
+        data = self._pad_ob(self.data, self.max_data_len)
+        result = self._pad_ob(self.result, self.max_data_len)
+
         return {
             "program": program,
-            "data": self.data,
+            "data": data,
             "pointers": pointers,
             "stack": stack,
             "skipflag": np.array([self.skipflag]).astype("int"),
             "commandpointer": np.array([self.commandpointer]),
             "last_action": np.array([self.last_action]),
             "execcost": np.array([self.execcost]),
-            "result": self.result,
+            "result": result,
             "pointersresult": pointersresult,
         }
 
@@ -214,6 +221,11 @@ class SortingMachine(gym.Env):
         super().reset(seed=seed)
         self._initial_machine_state()
         return self._get_obs(), self._get_info()
+
+    def increase_data_len(self):
+        if self.current_data_len < self.max_data_len:
+            self.current_data_len += 1
+        return self.reset()
 
     def _check_terminated(self):
         # return np.array_equal(self.data, self.correct_tree)
@@ -254,15 +266,13 @@ class SortingMachine(gym.Env):
             self.max_penalty,
             self.visited,
             self.correct_positions,
-            self.data_len,
+            self.current_data_len,
         )
 
         # If we terminate we give a bigger reward to
         # compensate for the early stop
         if terminated:
             reward = self.program_len - len(self.program) + 1
-
-        # truncated = truncated or self.check_early_stop(reward)
 
         return (
             self._get_obs(),
@@ -282,13 +292,6 @@ class SortingMachine(gym.Env):
             self.execcost += 1
             self._action_to_command[cmd]()
         self.last_action = cmd
-
-    def check_early_stop(self, reward):
-        if reward - self.early_stop_delta > self.best_reward:
-            self.best_reward = reward
-            return False
-        self.waits += 1
-        return self.waits >= self.early_stop_patience
 
     def render(self):
         print("---")
@@ -331,7 +334,7 @@ class SortingMachine(gym.Env):
                     self._cmd_name_to_action_nr["push"],
                     self._cmd_name_to_action_nr["mark"],
                     self._cmd_name_to_action_nr["compareright"],
-                    # self._cmd_name_to_action_nr["write"],
+                    self._cmd_name_to_action_nr["write"],
                     self._cmd_name_to_action_nr["leftchild"],
                     self._cmd_name_to_action_nr["rightchild"],
                 ]
@@ -359,7 +362,7 @@ class SortingMachine(gym.Env):
                 ]
             ] = 0
 
-        if len(self.pointersresult) == self.data_len - 1:
+        if len(self.pointersresult) == self.current_data_len - 1:
             mask[[self._cmd_name_to_action_nr["push"]]] = 0
 
         if (
@@ -368,7 +371,7 @@ class SortingMachine(gym.Env):
         ):
             mask[[self._cmd_name_to_action_nr["pop"]]] = 0
 
-        if len(self.stack) == self.data_len - 1:
+        if len(self.stack) == self.current_data_len - 1:
             mask[[self._cmd_name_to_action_nr["mark"]]] = 0
 
         # Check that prior to a jump a conditional is checked
@@ -431,7 +434,7 @@ class SortingMachine(gym.Env):
             self.pointers[-1] -= 1
 
     def push(self):
-        if len(self.pointersresult) < self.data_len - 1:
+        if len(self.pointersresult) < self.current_data_len - 1:
             self.pointersresult.append(self.pointersresult[-1])
 
     def pop(self):
@@ -439,7 +442,7 @@ class SortingMachine(gym.Env):
             self.pointersresult.pop()
 
     def mark(self):
-        if len(self.stack) < self.data_len - 1:
+        if len(self.stack) < self.current_data_len - 1:
             self.stack.append(self.commandpointer - 1)
         else:
             self.invalid_action = True
