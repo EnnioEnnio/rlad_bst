@@ -91,3 +91,20 @@ Kill the session
 ```bash
 tmux kill-session -t mysession
 ```
+
+## Starting a WandB-sweep
+> Note: On the VM, you might have to run every command with `poetry run` in front of it. You can also start a poetry shell for that... 
+Initialize a sweep:
+```bash
+wandb sweep sweep-config.yaml
+````
+
+Run the agent (also pops up in the terminal output):
+```bash
+wandb agent rlad_bst/rlad_bst/your_sweep_id
+```
+
+The agent now launches your program, passing parameters to tune, e.g.:
+```bash
+poetry run python3 rlad_bst/train.py --config=config.yaml --entropy_coefficient=<some_value>
+```
