@@ -1,31 +1,31 @@
-run-name: "standard_run"
+run_name: "standard_run_"
 
 # Env params
 max_program_len_factor: 9
 max_exec_cost_factor: 18
-start_data_len: 7
+start_data_len: 7                   # toTest
 max_data_len: 7
 verbosity: 0
-do_action_masking: true
+do_action_masking: true             # toTest
 
 
 # Train params
-total_timesteps: 1000_000
+total_timesteps: 1_000_000
 gradient_save_freq: 100
-batch_size: 256
+batch_size: 256                     # toTrain
 model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
 
-temperature: 2.0
-entropy_coefficient: 0.1
+temperature: 2.0                    # toTrain
+entropy_coefficient: 0.1            # toTrain
 
 # Callback params
-grow_data: false
+grow_data: false                    # toTest
 delta: 0.01
 patience: 2
 eval_interval: 10_000
 
 # Model params
-pretrained_encoder: "pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]
+pretrained_encoder: "pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]        # toTest
 
 # Debug params
 offline: false
