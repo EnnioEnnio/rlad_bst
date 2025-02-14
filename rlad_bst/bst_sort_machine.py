@@ -19,6 +19,7 @@ class SortingMachine(gym.Env):
         start_data_len,
         max_program_len_factor,
         max_exec_cost_factor,
+        do_action_masking,
         verbosity=1,
         render_mode=None,
     ):
@@ -27,6 +28,7 @@ class SortingMachine(gym.Env):
         self.max_program_len_factor = max_program_len_factor
         self.render_mode = render_mode
         self.verbosity = verbosity
+        self.do_action_masking = do_action_masking
         self.max_exec_cost_factor = max_exec_cost_factor
         self.overall_max_program_len = (
             self.max_program_len_factor * self.max_data_len
@@ -82,6 +84,16 @@ class SortingMachine(gym.Env):
             self._cmd_name_to_action_nr["isnottreestart"],
         ]
 
+        self._valid_first_actions = [
+            self._cmd_name_to_action_nr["right"],
+            self._cmd_name_to_action_nr["push"],
+            self._cmd_name_to_action_nr["mark"],
+            self._cmd_name_to_action_nr["compareright"],
+            self._cmd_name_to_action_nr["leftchild"],
+            self._cmd_name_to_action_nr["rightchild"],
+            self._cmd_name_to_action_nr["write"],
+        ]
+
         self.action_space = spaces.Discrete(len(self._action_to_command))
 
         self.observation_space = spaces.Dict(
@@ -93,7 +105,10 @@ class SortingMachine(gym.Env):
                     dtype=np.int64,
                 ),  # np.array of size program_len
                 "data": spaces.Box(
-                    low=-1, high=np.inf, shape=(max_data_len,), dtype=np.int64
+                    low=-1,
+                    high=max_data_len,
+                    shape=(max_data_len,),
+                    dtype=np.int64,
                 ),  # np.array of size max_data_len
                 "pointers": spaces.Box(
                     low=-1,
@@ -123,10 +138,16 @@ class SortingMachine(gym.Env):
                     dtype=np.int64,
                 ),  # np.int64
                 "execcost": spaces.Box(
-                    low=0, high=np.inf, shape=(1,), dtype=np.int64
+                    low=0,
+                    high=max_exec_cost_factor * max_data_len,
+                    shape=(1,),
+                    dtype=np.int64,
                 ),  # np.int64
                 "result": spaces.Box(
-                    low=-1, high=np.inf, shape=(max_data_len,), dtype=np.int64
+                    low=-1,
+                    high=max_data_len,
+                    shape=(max_data_len,),
+                    dtype=np.int64,
                 ),  # np.array of size data_len
                 "pointersresult": spaces.Box(
                     low=-1,
@@ -325,20 +346,12 @@ class SortingMachine(gym.Env):
         return highlighted_str
 
     def action_masks(self) -> np.array:
-        # If we are at the start we only allow right, push, mark, swapright
+        if not self.do_action_masking:
+            return np.ones(len(self._action_to_command))
+
         if self.last_action == len(self._action_to_command):
             mask = np.zeros(len(self._action_to_command))
-            mask[
-                [
-                    self._cmd_name_to_action_nr["right"],
-                    self._cmd_name_to_action_nr["push"],
-                    self._cmd_name_to_action_nr["mark"],
-                    self._cmd_name_to_action_nr["compareright"],
-                    self._cmd_name_to_action_nr["write"],
-                    self._cmd_name_to_action_nr["leftchild"],
-                    self._cmd_name_to_action_nr["rightchild"],
-                ]
-            ] = 1
+            mask[self._valid_first_actions] = 1
             return mask
 
         mask = np.ones(len(self._action_to_command))

@@ -58,13 +58,29 @@ def main():
 
         os.environ["WANDB_MODE"] = "dryrun"
 
+    start_data_len = config.get("start_data_len", 3)
+    print(
+        f"Load enviroment with array of size {start_data_len}, max program length {config.get('max_program_len_factor', 10) * start_data_len} and max exec cost {config.get('max_exec_cost_factor', 20) * start_data_len}"  # noqa: E501
+    )
+    if config["grow_data"]:
+        print(
+            f"Growing activated: Checking to grow data length every {config['eval_interval']} steps with patience {config['patience']} and delta {config['delta']}"  # noqa: E501
+        )
+        print(f"Maximum data length is {config.get('max_data_len', 7)}")
+    else:
+        print("Growing deactivated")
+        assert start_data_len == config.get(
+            "max_data_len", 7
+        ), "Without growing start and max data length must be the same"
+
     env_config = {
         "id": "rlad/bst-v0",
         "render_mode": "human",
         "max_data_len": config.get("max_data_len", 7),
-        "start_data_len": config.get("start_data_len", 3),
+        "start_data_len": start_data_len,
         "max_program_len_factor": config.get("max_program_len_factor", 10),
         "max_exec_cost_factor": config.get("max_exec_cost_factor", 20),
+        "do_action_masking": config.get("do_action_masking", False),
         "verbosity": config.get("verbosity", 0),
     }
 
@@ -84,6 +100,8 @@ def main():
             monitor_gym=True,
             save_code=True,
         )
+        wandb.define_metric("event_step")
+        wandb.define_metric("Event Distribution", step_metric="event_step")
         env = Monitor(env)
         eval_env = Monitor(eval_env)
 
@@ -93,7 +111,10 @@ def main():
             f"runs/{run.id}",
             config["batch_size"],
             config["entropy_coefficient"],
+            config["pretrained_encoder"],
+            config["temperature"],
         )
+
         model.learn(
             total_timesteps=config["total_timesteps"],
             callback=CallbackList(
@@ -109,6 +130,7 @@ def main():
                         patience=config["patience"],
                         delta=config["delta"],
                         checkpoint_path=f"checkpoints/{run.id}",
+                        grow_data=config["grow_data"],
                     ),
                 ]
             ),
@@ -125,6 +147,7 @@ def main():
             None,
             config["batch_size"],
             0.0,
+            config["pretrained_encoder"],
         )
         obs, info = env.reset()
         terminated, truncated = False, False

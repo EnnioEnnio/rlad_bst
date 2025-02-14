@@ -1,16 +1,30 @@
-start_data_len: 2
+# Env params
+max_program_len_factor: 9
+max_exec_cost_factor: 18
+start_data_len: 7
 max_data_len: 7
-max_program_len_factor: 10
-max_exec_cost_factor: 20
 verbosity: 0
-total_timesteps: 10_000
+do_action_masking: true
+
+
+# Train params
+total_timesteps: 1000_000
 gradient_save_freq: 100
-offline: false
-debug: false
 batch_size: 256
 model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
-entropy_coefficient: 0.01
 
+temperature: 2.0
+entropy_coefficient: 0.1
+
+# Callback params
+grow_data: false
 delta: 0.01
 patience: 2
 eval_interval: 10_000
+
+# Model params
+pretrained_encoder: "pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]
+
+# Debug params
+offline: false
+debug: false
