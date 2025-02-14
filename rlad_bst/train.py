@@ -16,6 +16,8 @@ Usage:
     `poetry run python3 train.py --config path/to/config.yaml --model-checkpoint path/to/model.zip`
 """  # noqa: E501
 
+import time
+
 import gymnasium as gym
 import wandb
 from gymnasium.utils.env_checker import check_env
@@ -92,6 +94,8 @@ def main():
 
     # If we do NOT have a model checkpoint, train a model
     if not config.get("model_checkpoint"):
+        run_name = config.get("run_name") + str(time.time())
+
         run = wandb.init(
             project=WANDB_PROJECT,
             entity=WANDB_ENTITY,
@@ -99,6 +103,7 @@ def main():
             sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
             monitor_gym=True,
             save_code=True,
+            name=run_name,
         )
         wandb.define_metric("event_step")
         wandb.define_metric("Event Distribution", step_metric="event_step")
@@ -106,13 +111,14 @@ def main():
         eval_env = Monitor(eval_env)
 
         model = get_model(
-            env,
-            config["verbosity"],
-            f"runs/{run.id}",
-            config["batch_size"],
-            config["entropy_coefficient"],
-            config["pretrained_encoder"],
-            config["temperature"],
+            env=env,
+            verbose=config["verbosity"],
+            tensorboard_log=f"runs/{run.id}",
+            batch_size=config["batch_size"],
+            ent_coef=config["entropy_coefficient"],
+            pretrained_encoder=config["pretrained_encoder"],
+            temperatur=config["temperature"],
+            learning_rate=config["learning_rate"],
         )
 
         model.learn(
