@@ -132,6 +132,12 @@ def parse_arguments() -> dict:
         required=False,
     )
 
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        required=True,
+    )
+
     return vars(parser.parse_args())
 
 

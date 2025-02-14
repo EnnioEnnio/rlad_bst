@@ -1,3 +1,5 @@
+run-name: "standard_run"
+
 # Env params
 max_program_len_factor: 9
 max_exec_cost_factor: 18
