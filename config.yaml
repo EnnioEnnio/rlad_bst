@@ -10,10 +10,11 @@ do_action_masking: true             # toTest
 
 
 # Train params
-total_timesteps: 1_000_000
+total_timesteps: 2_000_000
 gradient_save_freq: 100
 batch_size: 256                     # toTrain
 model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
+learning_rate: 0.0003               # toTrain
 
 temperature: 2.0                    # toTrain
 entropy_coefficient: 0.1            # toTrain

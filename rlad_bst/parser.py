@@ -103,6 +103,18 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
+        "--learning-rate",
+        type=float,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        required=False,
+    )
+
+    parser.add_argument(
         "--entropy-coefficient",
         type=float,
         required=False,

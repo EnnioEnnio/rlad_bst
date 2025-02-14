@@ -111,13 +111,14 @@ def main():
         eval_env = Monitor(eval_env)
 
         model = get_model(
-            env,
-            config["verbosity"],
-            f"runs/{run.id}",
-            config["batch_size"],
-            config["entropy_coefficient"],
-            config["pretrained_encoder"],
-            config["temperature"],
+            env=env,
+            verbose=config["verbosity"],
+            tensorboard_log=f"runs/{run.id}",
+            batch_size=config["batch_size"],
+            ent_coef=config["entropy_coefficient"],
+            pretrained_encoder=config["pretrained_encoder"],
+            temperatur=config["temperature"],
+            learning_rate=config["learning_rate"],
         )
 
         model.learn(

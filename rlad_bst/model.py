@@ -532,6 +532,7 @@ def get_model(
     ent_coef: float,
     pretrained_encoder: bool,
     temperatur: float,
+    learning_rate: float,
 ):
     policy_kwargs = dict(
         net_arch=dict(pi=[512, 256], vf=[512, 256]),
@@ -550,6 +551,7 @@ def get_model(
         ent_coef=ent_coef,
         pretrained_encoder=pretrained_encoder,
         temperature=temperatur,
+        learning_rate=learning_rate,
     )
     return model
 
@@ -557,11 +559,12 @@ def get_model(
 def load_from_checkpoint(
     path,
     env,
-    verbose,
+    verbose: bool,
     tensorboard_log,
-    batch_size,
-    ent_coef,
-    pretrained_encoder,
+    batch_size: int,
+    ent_coef: float,
+    pretrained_encoder: bool,
+    learning_rate: float,
 ):
     model = get_model(
         env,
@@ -571,6 +574,7 @@ def load_from_checkpoint(
         ent_coef,
         pretrained_encoder,
         temperatur=1.0,
+        learning_rate=learning_rate,
     )
     model.set_parameters(path)
     return model
