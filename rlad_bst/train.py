@@ -80,6 +80,7 @@ def main():
         "render_mode": "human",
         "max_data_len": config.get("max_data_len", 7),
         "start_data_len": start_data_len,
+        "start_program_len_factor": config.get("start_program_len_factor", 1),
         "max_program_len_factor": config.get("max_program_len_factor", 10),
         "max_exec_cost_factor": config.get("max_exec_cost_factor", 20),
         "do_action_masking": config.get("do_action_masking", False),
@@ -137,6 +138,7 @@ def main():
                         delta=config["delta"],
                         checkpoint_path=f"checkpoints/{run.id}",
                         grow_data=config["grow_data"],
+                        grow_program_len=config["grow_program_len"],
                     ),
                 ]
             ),
