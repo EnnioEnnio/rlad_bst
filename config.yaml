@@ -8,6 +8,7 @@ start_data_len: 7                   # toTest
 max_data_len: 7
 verbosity: 0
 do_action_masking: true             # toTest
+reward_function: "new"          # Choose between "old" or "new"
 
 
 # Train params
@@ -28,7 +29,7 @@ patience: 2
 eval_interval: 10_000
 
 # Model params
-pretrained_encoder: "pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]        # toTest
+pretrained_encoder: "jina-pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]        # toTest
 
 # Debug params
 offline: false
