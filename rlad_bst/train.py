@@ -77,7 +77,7 @@ def main():
 
     env_config = {
         "id": "rlad/bst-v0",
-        "render_mode": "human",
+        "render_mode": None,
         "max_data_len": config.get("max_data_len", 7),
         "start_data_len": start_data_len,
         "start_program_len_factor": config.get("start_program_len_factor", 1),
@@ -85,6 +85,7 @@ def main():
         "max_exec_cost_factor": config.get("max_exec_cost_factor", 20),
         "do_action_masking": config.get("do_action_masking", False),
         "verbosity": config.get("verbosity", 0),
+        "reward_function": config.get("reward_function"),
     }
 
     env = gym.make(**env_config)
