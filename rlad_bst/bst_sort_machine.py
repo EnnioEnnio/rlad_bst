@@ -17,6 +17,7 @@ class SortingMachine(gym.Env):
         self,
         max_data_len,
         start_data_len,
+        start_program_len_factor,
         max_program_len_factor,
         max_exec_cost_factor,
         do_action_masking,
@@ -26,12 +27,13 @@ class SortingMachine(gym.Env):
         self.max_data_len = max_data_len
         self.current_data_len = start_data_len
         self.max_program_len_factor = max_program_len_factor
+        self.program_len_factor = start_program_len_factor
         self.render_mode = render_mode
         self.verbosity = verbosity
         self.do_action_masking = do_action_masking
         self.max_exec_cost_factor = max_exec_cost_factor
         self.overall_max_program_len = (
-            self.max_program_len_factor * self.max_data_len
+            max_program_len_factor * self.max_data_len
         )
 
         self.pad_value = -1
@@ -91,7 +93,6 @@ class SortingMachine(gym.Env):
             self._cmd_name_to_action_nr["compareright"],
             self._cmd_name_to_action_nr["leftchild"],
             self._cmd_name_to_action_nr["rightchild"],
-            self._cmd_name_to_action_nr["write"],
         ]
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
@@ -186,7 +187,7 @@ class SortingMachine(gym.Env):
         self.maximum_exec_cost = (
             self.max_exec_cost_factor * self.current_data_len
         )
-        self.program_len = self.max_program_len_factor * self.current_data_len
+        self.program_len = self.program_len_factor * self.current_data_len
 
     def _make_binary_tree(self):
         def in_order(index, sorted_tree, result):
@@ -246,6 +247,11 @@ class SortingMachine(gym.Env):
     def increase_data_len(self):
         if self.current_data_len < self.max_data_len:
             self.current_data_len += 1
+        return self.reset()
+
+    def increase_program_len(self):
+        if self.program_len_factor < self.max_program_len_factor:
+            self.program_len_factor += 1
         return self.reset()
 
     def _check_terminated(self):

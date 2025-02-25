@@ -28,6 +28,7 @@ class GrowDataLenCallback(BaseCallback):
     def __init__(
         self,
         grow_data: bool,
+        grow_program_len: int,
         n_steps: int,
         eval_env: Union[gym.Env, VecEnv],
         patience: int,
@@ -40,26 +41,33 @@ class GrowDataLenCallback(BaseCallback):
         self.last_time_trigger = 0
 
         # Evaluation in an early stopping fashion
-        self.best_mean_reward = -np.inf
+        self.data_mean_reward = -np.inf
+        self.program_mean_reward = -np.inf
         self.last_save_reward = -np.inf
         self.patience = patience
         self.delta = delta
-        self.wait = 0
+        self.data_wait = 0
+        self.program_wait = 0
         self.eval_env = eval_env
-        self.action_names = list(
-            eval_env.unwrapped._action_nr_to_cmd_name.values()
-        )
+        self._action_nr_to_cmd_name = eval_env.unwrapped._action_nr_to_cmd_name
+        self.action_names = list(self._action_nr_to_cmd_name.values())
         self.first_step_action_names = [
-            eval_env.unwrapped._action_nr_to_cmd_name[action]
+            self._action_nr_to_cmd_name[action]
             for action in eval_env.unwrapped._valid_first_actions
         ]
         self.env_does_action_masking = eval_env.unwrapped.do_action_masking
+
+        self.action_table = wandb.Table(
+            columns=["event_step", "reward", "program", "results"]
+        )
 
         # Checkpoint saving
         self.checkpoint_path = checkpoint_path
         self.checkpoint_buffer = None
         self.first_step_logs = []
+
         self.grow_data = grow_data
+        self.grow_program_len = grow_program_len
 
     def _on_step(self) -> bool:
         if (self.num_timesteps - self.last_time_trigger) >= self.n_steps:
@@ -77,15 +85,32 @@ class GrowDataLenCallback(BaseCallback):
             )
             mean_reward = np.mean(reward)
             self._delete_previous_checkpoint_if_needed(mean_reward)
-            if self.grow_data:
-                self._increase_data_len_if_needed(
-                    mean_reward, episodes_terminated
+            if self.grow_data and self._check_if_increase_data_len(
+                mean_reward, episodes_terminated
+            ):
+                self.model.get_env().env_method("increase_data_len")
+                self.eval_env.unwrapped.increase_data_len()
+                print(
+                    "Data len increased to: ",
+                    self.model.get_env().get_attr("current_data_len"),
+                )
+            if self.grow_program_len and self._check_if_increase_program_len(
+                mean_reward, episodes_terminated
+            ):
+                self.model.get_env().env_method("increase_program_len")
+                self.eval_env.unwrapped.increase_program_len()
+                print(
+                    "Program len increased to: ",
+                    self.model.get_env().get_attr("program_len"),
                 )
             self.first_step_logs.append(log_dict["first_step_log"])
             self._log_data(log_dict)
             self.checkpoint_buffer = model_path
 
         return True
+
+    def _on_training_end(self) -> None:
+        wandb.log({"val/action_table": self.action_table})
 
     def _log_data(self, log_dict):
         wandb_log = {
@@ -136,6 +161,18 @@ class GrowDataLenCallback(BaseCallback):
             )
         wandb.log(wandb_log)
 
+        program = [
+            self._action_nr_to_cmd_name[cmd]
+            for cmd in log_dict["first_step_log"]["program"]
+            if cmd > 0
+        ]
+        self.action_table.add_data(
+            self.num_timesteps,
+            self.first_step_logs[0]["episode_reward"],
+            ", ".join(program),
+            str(self.first_step_logs[0]["final_result"]),
+        )
+
     def _delete_previous_checkpoint_if_needed(
         self, mean_reward: float
     ) -> None:
@@ -146,32 +183,50 @@ class GrowDataLenCallback(BaseCallback):
                 os.remove(self.checkpoint_buffer)
             self.last_save_reward = mean_reward
 
-    def _increase_data_len_if_needed(
+    def _check_if_increase_data_len(
         self, mean_reward: float, episodes_terminated: float
-    ):
+    ) -> bool:
         """
         We increase the data lenght if all episodes terminated
         and the reward is not getting better.
         """
         if not len(episodes_terminated) == sum(episodes_terminated):
             print("Not all episodes terminated: ", episodes_terminated)
-            return
-        if mean_reward > self.best_mean_reward + self.delta:
-            self.best_mean_reward = mean_reward
-            self.wait = 0
+            return False
+        if mean_reward > self.data_mean_reward + self.delta:
+            self.data_mean_reward = mean_reward
+            self.data_wait = 0
             print("New best mean reward: ", mean_reward)
         else:
-            self.wait += 1
-            print("Wait: ", self.wait)
-            if self.wait >= self.patience:
-                self.wait = 0
-                self.best_mean_reward = mean_reward
-                self.model.get_env().env_method("increase_data_len")
-                self.eval_env.unwrapped.increase_data_len()
-                print(
-                    "Data len increased to: ",
-                    self.model.get_env().get_attr("current_data_len"),
-                )
+            self.data_wait += 1
+            print("Data wait: ", self.data_wait)
+            if self.data_wait >= self.patience:
+                self.data_wait = 0
+                self.data_mean_reward = mean_reward
+                return True
+        return False
+
+    def _check_if_increase_program_len(
+        self, mean_reward: float, episodes_terminated: float
+    ) -> bool:
+        """
+        We increase the program length if the model has solved the subproblem,
+        meaning the reward is not getting better but also not worse.
+        """
+        if (
+            mean_reward > self.program_mean_reward - self.delta
+            and mean_reward < self.program_mean_reward + self.delta
+        ):
+            self.program_wait += 1
+            print("Program wait: ", self.program_wait)
+            if self.program_wait >= self.patience:
+                self.program_wait = 0
+                return True
+        else:
+            self.program_mean_reward = mean_reward
+            self.program_wait = 0
+            print("New best mean reward: ", mean_reward)
+        return False
 
     def _checkpoint_path(
         self, checkpoint_type: str = "", extension: str = ""
@@ -238,8 +293,8 @@ def evaluate_policy(
             deterministic=deterministic,
             action_masks=action_masks,
         )
-        per_episode_log_dicts.append(log_dict)
         observations, reward, done, infos = env.step(actions)
+        per_episode_log_dicts.append(log_dict)
         current_reward += reward
         current_length += 1
         if done:
@@ -248,6 +303,13 @@ def evaluate_policy(
             episodes_terminated.append(not infos[0]["TimeLimit.truncated"])
             if episode_count == 0:
                 first_step_log = per_episode_log_dicts[0]
+                first_step_log["final_result"] = infos[0][
+                    "terminal_observation"
+                ]["result"]
+                first_step_log["episode_reward"] = infos[0]["episode"]["r"]
+                first_step_log["program"] = infos[0]["terminal_observation"][
+                    "program"
+                ]
             episode_count += 1
             current_reward = 0
             current_length = 0
@@ -265,11 +327,14 @@ def evaluate_policy(
             log["actions"].item()
             for episode_logs in log_dicts
             for log in episode_logs
-        ]
+        ],
+        minlength=model.action_space.n,
     )
+    trace = [log["actions"].item() for log in log_dicts[0]]
     log_dict = {
         "first_step_log": first_step_log,
         "actions": actions,
+        "trace": trace,
     }
     if return_episode_terminated:
         return episode_rewards, episodes_terminated, log_dict
