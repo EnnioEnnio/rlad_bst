@@ -23,7 +23,7 @@ class CustomMaskablePPO(MaskablePPO):
     """
 
     def __init__(self, *args, **kwargs):
-        self.pretrained_encoder = kwargs.pop("pretrained_encoder", False)
+        self.pretrained_encoder = kwargs.get("pretrained_encoder", False)
         self.temperature = kwargs.pop("temperature")
         super().__init__(*args, **kwargs)
 
@@ -76,7 +76,7 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
     """
 
     def __init__(self, *args, **kwargs):
-        self.pretrained_encoder = kwargs.pop("pretrained_encoder")
+        self.pretrained_encoder = kwargs.get("pretrained_encoder")
         self.temperature = kwargs.pop("temperature")
         super().__init__(**kwargs)
         self.action_dist = CustomMaskableCategoricalDistribution(
@@ -321,17 +321,20 @@ class CustomExtractor(nn.Module):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        if kwargs.get("pretrained_encoder"):
+        pretrained_encoder: str = kwargs.get("pretrained_encoder")
+        if pretrained_encoder == "jina-pretrained":
             self.encoder = AutoModel.from_pretrained(
                 "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
             )
-        else:
+        elif pretrained_encoder == "jina-not-pretrained":
             config = AutoConfig.from_pretrained(
                 "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
             )
             self.encoder = AutoModel.from_config(
                 config, trust_remote_code=True
             )
+        else:
+            print(f'ERROR: "{pretrained_encoder}" is not possible')
         # The embedding matrix of the model does not make sense for our model
         # we will replace it by a embedding matrix of only 112 + 2 elements
         self.encoder.embeddings.word_embeddings = nn.Embedding(
@@ -530,7 +533,7 @@ def get_model(
     tensorboard_log,
     batch_size: int,
     ent_coef: float,
-    pretrained_encoder: bool,
+    pretrained_encoder: str,
     temperatur: float,
     learning_rate: float,
 ):
@@ -563,7 +566,7 @@ def load_from_checkpoint(
     tensorboard_log,
     batch_size: int,
     ent_coef: float,
-    pretrained_encoder: bool,
+    pretrained_encoder: str,
     learning_rate: float,
 ):
     model = get_model(
