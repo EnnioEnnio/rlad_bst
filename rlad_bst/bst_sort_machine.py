@@ -5,7 +5,11 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
 
-from rlad_bst.reward import calculate_reward, get_distance_matrix
+from rlad_bst.reward import (
+    calculate_old_reward,
+    calculate_reward,
+    get_distance_matrix,
+)
 
 register(id="rlad/bst-v0", entry_point="bst_sort_machine:SortingMachine")
 
@@ -23,6 +27,7 @@ class SortingMachine(gym.Env):
         do_action_masking,
         verbosity=1,
         render_mode=None,
+        reward_function="new",
     ):
         self.max_data_len = max_data_len
         self.current_data_len = start_data_len
@@ -35,6 +40,7 @@ class SortingMachine(gym.Env):
         self.overall_max_program_len = (
             max_program_len_factor * self.max_data_len
         )
+        self.reward_function = reward_function
 
         self.pad_value = -1
 
@@ -287,14 +293,22 @@ class SortingMachine(gym.Env):
             terminated = self._check_terminated()
             truncated = self._check_trucated()
 
-        reward = calculate_reward(
-            self.result,
-            self.edge_distance_matrix,
-            self.max_penalty,
-            self.visited,
-            self.correct_positions,
-            self.current_data_len,
-        )
+        """
+        Calculate Reward based on function set in config (not beautiful, sorry)
+        """
+        if self.reward_function == "new":
+            reward = calculate_reward(
+                self.result,
+                self.edge_distance_matrix,
+                self.max_penalty,
+                self.visited,
+                self.correct_positions,
+                self.current_data_len,
+            )
+        else:
+            reward = calculate_old_reward(
+                solution_arr=self.correct_tree, candidate_arr=self.result
+            )
 
         # If we terminate we give a bigger reward to
         # compensate for the early stop

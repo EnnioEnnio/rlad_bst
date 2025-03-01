@@ -72,6 +72,19 @@ def parse_arguments() -> dict:
     parser.add_argument("--verbosity", type=int, required=False)
 
     parser.add_argument(
+        "--do-action-masking",
+        type=bool,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--reward-function",
+        type=str,
+        required=False,
+        help='use "new" for current, or "old" for deprecated reward function',
+    )
+
+    parser.add_argument(
         "--total-timesteps",
         type=int,
         required=False,
@@ -148,6 +161,13 @@ def parse_arguments() -> dict:
         "--run-name",
         type=str,
         required=True,
+    )
+
+    parser.add_argument(
+        "--pretrained-encoder",
+        type=str,
+        required=False,
+        help='Choose from "jina-pretrained", "jina-not-pretrained", "default"',
     )
 
     return vars(parser.parse_args())
