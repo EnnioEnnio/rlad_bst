@@ -547,8 +547,10 @@ def get_model(
     policy_kwargs = dict(
         net_arch=dict(pi=[512, 256], vf=[512, 256]),
         activation_fn=nn.ReLU,
-        features_extractor_class=CustomCombinedExtractor,
     )
+
+    if model_args["pretrained_encoder"] != "default":
+        policy_kwargs["features_extractor_class"] = CustomCombinedExtractor
 
     # Create the model
     model = CustomMaskablePPO(
