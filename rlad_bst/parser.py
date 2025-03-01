@@ -164,10 +164,34 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
+        "--grow-data",
+        type=bool,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--grow-program-len",
+        type=bool,
+        required=False,
+    )
+
+    parser.add_argument(
         "--pretrained-encoder",
         type=str,
         required=False,
         help='Choose from "jina-pretrained", "jina-not-pretrained", "default"',
+    )
+
+    parser.add_argument(
+        "--use-custom-value-net",
+        type=bool,
+        default=True,
+    )
+
+    parser.add_argument(
+        "--use-custom-action-net",
+        type=bool,
+        default=True,
     )
 
     return vars(parser.parse_args())

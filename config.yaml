@@ -1,4 +1,4 @@
-run_name: "standard_run_"
+# run_name: "standard_run_"
 
 # Env params
 start_program_len_factor: 9
@@ -30,7 +30,9 @@ eval_interval: 10_000
 
 # Model params
 pretrained_encoder: "jina-pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]        # toTest
+use_custom_value_net: True
+use_custom_action_net: True
 
 # Debug params
-offline: false
-debug: false
+offline: True
+debug: True

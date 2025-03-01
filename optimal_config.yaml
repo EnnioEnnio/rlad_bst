@@ -28,7 +28,9 @@ patience: 2
 eval_interval: 10_000
 
 # Model params
-pretrained_encoder: "pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]        # toTest
+pretrained_encoder: "jina-pretrained" # choose from ["jina-pretrained", "jina-not-pretrained", "default"]        # toTest
+use_custom_value_net: True
+use_custom_action_net: True
 
 # Debug params
 offline: false

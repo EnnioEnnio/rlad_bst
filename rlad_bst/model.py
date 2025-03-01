@@ -23,7 +23,7 @@ class CustomMaskablePPO(MaskablePPO):
     """
 
     def __init__(self, *args, **kwargs):
-        self.pretrained_encoder = kwargs.get("pretrained_encoder", False)
+        self.model_args = kwargs.pop("model_args", False)
         self.temperature = kwargs.pop("temperature")
         super().__init__(*args, **kwargs)
 
@@ -33,7 +33,7 @@ class CustomMaskablePPO(MaskablePPO):
             observation_space=self.observation_space,
             action_space=self.action_space,
             lr_schedule=self.lr_schedule,
-            pretrained_encoder=self.pretrained_encoder,
+            model_args=self.model_args,
             temperature=self.temperature,
             **self.policy_kwargs,
         )
@@ -76,7 +76,7 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
     """
 
     def __init__(self, *args, **kwargs):
-        self.pretrained_encoder = kwargs.get("pretrained_encoder")
+        self.model_args = kwargs.pop("model_args")
         self.temperature = kwargs.pop("temperature")
         super().__init__(**kwargs)
         self.action_dist = CustomMaskableCategoricalDistribution(
@@ -91,17 +91,19 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
         :param lr_schedule: Learning rate schedule
             lr_schedule(1) is the initial learning rate
         """
-        if self.pretrained_encoder != "default":
+        if self.model_args["pretrained_encoder"] != "default":
             self.mlp_extractor = CustomExtractor(
                 self.features_dim,
-                pretrained_encoder=self.pretrained_encoder,
+                pretrained_encoder=self.model_args["pretrained_encoder"],
                 offset_size=self.features_extractor.offset_size,
             )
 
-        self.action_net = self.action_dist.proba_distribution_net(
-            latent_dim=self.mlp_extractor.latent_dim_pi
-        )
-        self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
+        if self.model_args["custom_action_net"]:
+            self.action_net = self.action_dist.proba_distribution_net(
+                latent_dim=self.mlp_extractor.latent_dim_pi
+            )
+        if self.model_args["custom_value_net"]:
+            self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
@@ -322,19 +324,24 @@ class CustomExtractor(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         pretrained_encoder: str = kwargs.get("pretrained_encoder")
-        if pretrained_encoder == "jina-pretrained":
-            self.encoder = AutoModel.from_pretrained(
-                "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
+        if pretrained_encoder.split("-")[0] == "jina":
+            encoder_name = "jinaai/jina-embeddings-v2-small-en"
+        else:
+            raise ValueError(
+                f"Pretrained encoder {pretrained_encoder} not supported"
             )
-        elif pretrained_encoder == "jina-not-pretrained":
+
+        if pretrained_encoder.split("-")[1] == "pretrained":
+            self.encoder = AutoModel.from_pretrained(
+                encoder_name, trust_remote_code=True
+            )
+        else:
             config = AutoConfig.from_pretrained(
-                "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
+                encoder_name, trust_remote_code=True
             )
             self.encoder = AutoModel.from_config(
                 config, trust_remote_code=True
             )
-        else:
-            print(f'ERROR: "{pretrained_encoder}" is not possible')
         # The embedding matrix of the model does not make sense for our model
         # we will replace it by a embedding matrix of only 112 + 2 elements
         self.encoder.embeddings.word_embeddings = nn.Embedding(
@@ -533,7 +540,7 @@ def get_model(
     tensorboard_log,
     batch_size: int,
     ent_coef: float,
-    pretrained_encoder: str,
+    model_args: dict,
     temperatur: float,
     learning_rate: float,
 ):
@@ -552,7 +559,7 @@ def get_model(
         tensorboard_log=tensorboard_log,
         batch_size=batch_size,
         ent_coef=ent_coef,
-        pretrained_encoder=pretrained_encoder,
+        model_args=model_args,
         temperature=temperatur,
         learning_rate=learning_rate,
     )

@@ -94,6 +94,12 @@ def main():
 
     check_env(env.unwrapped)
 
+    model_args = {
+        "pretrained_encoder": config.get("pretrained_encoder"),
+        "custom_value_net": config.get("use_custom_value_net", True),
+        "custom_action_net": config.get("use_custom_action_net", True),
+    }
+
     # If we do NOT have a model checkpoint, train a model
     if not config.get("model_checkpoint"):
         run_name = config.get("run_name", None)
@@ -119,7 +125,7 @@ def main():
             tensorboard_log=f"runs/{run.id}",
             batch_size=config["batch_size"],
             ent_coef=config["entropy_coefficient"],
-            pretrained_encoder=config["pretrained_encoder"],
+            model_args=model_args,
             temperatur=config["temperature"],
             learning_rate=config["learning_rate"],
         )
@@ -157,7 +163,7 @@ def main():
             None,
             config["batch_size"],
             0.0,
-            config["pretrained_encoder"],
+            model_args,
         )
         obs, info = env.reset()
         terminated, truncated = False, False
