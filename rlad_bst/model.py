@@ -551,6 +551,8 @@ def get_model(
 
     if model_args["pretrained_encoder"] != "default":
         policy_kwargs["features_extractor_class"] = CustomCombinedExtractor
+    else:
+        policy_kwargs["features_extractor_class"] = CombinedExtractor
 
     # Create the model
     model = CustomMaskablePPO(
