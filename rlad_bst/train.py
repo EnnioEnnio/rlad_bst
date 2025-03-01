@@ -86,6 +86,7 @@ def main():
         "do_action_masking": config.get("do_action_masking", False),
         "verbosity": config.get("verbosity", 0),
         "reward_function": config.get("reward_function"),
+        "naive": config.get("naive", False),
     }
 
     env = gym.make(**env_config)

@@ -98,6 +98,12 @@ def parse_arguments() -> dict:
         help='use "new" for current, or "old" for deprecated reward function',
     )
 
+    parser.add_argument(
+        "--naive",
+        type=bool,
+        required=False,
+    )
+
     # Train params
     parser.add_argument(
         "--total-timesteps",

@@ -28,6 +28,7 @@ class SortingMachine(gym.Env):
         verbosity=1,
         render_mode=None,
         reward_function="new",
+        naive=False,
     ):
         self.max_data_len = max_data_len
         self.current_data_len = start_data_len
@@ -41,6 +42,7 @@ class SortingMachine(gym.Env):
             max_program_len_factor * self.max_data_len
         )
         self.reward_function = reward_function
+        self.naive = naive
 
         self.pad_value = -1
 
@@ -99,6 +101,14 @@ class SortingMachine(gym.Env):
             self._cmd_name_to_action_nr["compareright"],
             self._cmd_name_to_action_nr["leftchild"],
             self._cmd_name_to_action_nr["rightchild"],
+        ]
+
+        # To solve the problem for a fixed size you only need a few commands
+        self._naive_actions = [
+            self._cmd_name_to_action_nr["leftchild"],
+            self._cmd_name_to_action_nr["rightchild"],
+            self._cmd_name_to_action_nr["write"],
+            self._cmd_name_to_action_nr["parent"],
         ]
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
@@ -368,6 +378,10 @@ class SortingMachine(gym.Env):
     def action_masks(self) -> np.array:
         if not self.do_action_masking:
             return np.ones(len(self._action_to_command))
+        elif self.naive:
+            mask = np.zeros(len(self._action_to_command))
+            mask[self._naive_actions] = 1
+            return mask
 
         if self.last_action == len(self._action_to_command):
             mask = np.zeros(len(self._action_to_command))

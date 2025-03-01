@@ -9,6 +9,7 @@ max_data_len: 7
 verbosity: 0
 do_action_masking: true             # toTest
 reward_function: "new"          # Choose between "old" or "new"
+naive: false                        # toTest
 
 
 # Train params
