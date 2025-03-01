@@ -96,7 +96,8 @@ def main():
 
     # If we do NOT have a model checkpoint, train a model
     if not config.get("model_checkpoint"):
-        run_name = config.get("run_name") + str(time.time())
+        run_name = config.get("run_name", None)
+        run_name = run_name + str(time.time()) if run_name else None
 
         run = wandb.init(
             project=WANDB_PROJECT,
@@ -129,7 +130,7 @@ def main():
                 [
                     WandbCallback(
                         gradient_save_freq=config["gradient_save_freq"],
-                        model_save_path=f"models/{run.id}",
+                        model_save_path=f"models/{run.name}",
                         verbose=config["verbosity"],
                     ),
                     GrowDataLenCallback(
@@ -137,7 +138,7 @@ def main():
                         eval_env=eval_env,
                         patience=config["patience"],
                         delta=config["delta"],
-                        checkpoint_path=f"checkpoints/{run.id}",
+                        checkpoint_path=f"checkpoints/{run.name}",
                         grow_data=config["grow_data"],
                         grow_program_len=config["grow_program_len"],
                     ),

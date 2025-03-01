@@ -160,7 +160,7 @@ def parse_arguments() -> dict:
     parser.add_argument(
         "--run-name",
         type=str,
-        required=True,
+        default="wandb",
     )
 
     parser.add_argument(

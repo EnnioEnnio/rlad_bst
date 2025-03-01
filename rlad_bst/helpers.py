@@ -168,9 +168,9 @@ class GrowDataLenCallback(BaseCallback):
         ]
         self.action_table.add_data(
             self.num_timesteps,
-            self.first_step_logs[0]["episode_reward"],
+            self.first_step_logs[-1]["episode_reward"],
             ", ".join(program),
-            str(self.first_step_logs[0]["final_result"]),
+            str(self.first_step_logs[-1]["final_result"]),
         )
 
     def _delete_previous_checkpoint_if_needed(
