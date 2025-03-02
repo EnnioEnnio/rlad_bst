@@ -102,14 +102,21 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
                 offset_size=self.features_extractor.offset_size,
             )
 
-        if self.model_args["custom_action_net"]:
-            logger.info("Using custom action net")
-            self.action_net = self.action_dist.proba_distribution_net(
-                latent_dim=self.mlp_extractor.latent_dim_pi
-            )
+        self.action_net = self.action_dist.proba_distribution_net(
+            latent_dim=self.mlp_extractor.latent_dim_pi,
+            custom=self.model_args["custom_action_net"],
+        )
         if self.model_args["custom_value_net"]:
             logger.info("Using custom value net")
             self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
+        else:
+            # Needed as the latent_dim_vf could have changed
+            logger.info("Using no custom value net")
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+
+        logger.info(f"encoder: {self.mlp_extractor}")
+        logger.info(f"action_net: {self.action_net}")
+        logger.info(f"value_net: {self.value_net}")
 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
@@ -393,7 +400,9 @@ class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
         self.temperature = kwargs.pop("temperature")
         super().__init__(*args, **kwargs)
 
-    def proba_distribution_net(self, latent_dim: int) -> nn.Module:
+    def proba_distribution_net(
+        self, latent_dim: int, custom: bool
+    ) -> nn.Module:
         """
         Create the layer that represents the distribution:
         it will be the logits of the Categorical distribution.
@@ -403,8 +412,11 @@ class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
             of the policy network (before the action layer)
         :return:
         """
-        action_logits = CustomHead(latent_dim, self.action_dim)
-        return action_logits
+        if custom:
+            logger.info("Using custom action net")
+            return CustomHead(latent_dim, self.action_dim)
+        logger.info("Using default action net")
+        return nn.Linear(latent_dim, self.action_dim)
 
     def proba_distribution(
         self, action_logits: torch.Tensor, should_log=False
