@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from gymnasium import spaces
+from print_on_steroids import logger
 from sb3_contrib.common.maskable.distributions import (
     MaskableCategoricalDistribution,
 )
@@ -92,6 +93,9 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
             lr_schedule(1) is the initial learning rate
         """
         if self.model_args["pretrained_encoder"] != "default":
+            logger.info(
+                f"Using custom MLP: {self.model_args['pretrained_encoder']}"
+            )
             self.mlp_extractor = CustomExtractor(
                 self.features_dim,
                 pretrained_encoder=self.model_args["pretrained_encoder"],
@@ -99,10 +103,12 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
             )
 
         if self.model_args["custom_action_net"]:
+            logger.info("Using custom action net")
             self.action_net = self.action_dist.proba_distribution_net(
                 latent_dim=self.mlp_extractor.latent_dim_pi
             )
         if self.model_args["custom_value_net"]:
+            logger.info("Using custom value net")
             self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
 
         # Init weights: use orthogonal initialization
@@ -300,6 +306,9 @@ class CustomCombinedExtractor(CombinedExtractor):
                 start_offset += length
 
         self.offset_size = self.offsets[-1] + max_lengths[-1]
+        logger.info(
+            f"Using CustomCombinedExtractor with offset: {self.offset_size}"
+        )
 
     def forward(self, observations: TensorDict) -> torch.Tensor:
         encoded_tensor_list = []
@@ -332,10 +341,12 @@ class CustomExtractor(nn.Module):
             )
 
         if pretrained_encoder.split("-")[1] == "pretrained":
+            logger.info(f"Using pretrained encoder: {encoder_name}")
             self.encoder = AutoModel.from_pretrained(
                 encoder_name, trust_remote_code=True
             )
         else:
+            logger.info(f"Using not pretrained encoder: {encoder_name}")
             config = AutoConfig.from_pretrained(
                 encoder_name, trust_remote_code=True
             )
@@ -376,6 +387,9 @@ class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
     """
 
     def __init__(self, *args, **kwargs):
+        logger.info(
+            f"Using CustomMaskableCategoricalDistribution with temperature: {kwargs.get('temperature')}"  # noqa: E501
+        )
         self.temperature = kwargs.pop("temperature")
         super().__init__(*args, **kwargs)
 
@@ -541,7 +555,7 @@ def get_model(
     batch_size: int,
     ent_coef: float,
     model_args: dict,
-    temperatur: float,
+    temperature: float,
     learning_rate: float,
 ):
     policy_kwargs = dict(
@@ -550,8 +564,10 @@ def get_model(
     )
 
     if model_args["pretrained_encoder"] != "default":
+        logger.info("Using CustomCombinedExtractor")
         policy_kwargs["features_extractor_class"] = CustomCombinedExtractor
     else:
+        logger.info("Using default combined extractor")
         policy_kwargs["features_extractor_class"] = CombinedExtractor
 
     # Create the model
@@ -564,7 +580,7 @@ def get_model(
         batch_size=batch_size,
         ent_coef=ent_coef,
         model_args=model_args,
-        temperature=temperatur,
+        temperature=temperature,
         learning_rate=learning_rate,
     )
     return model

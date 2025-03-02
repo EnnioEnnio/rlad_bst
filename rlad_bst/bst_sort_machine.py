@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
+from print_on_steroids import logger
 
 from rlad_bst.reward import (
     calculate_old_reward,
@@ -176,6 +177,16 @@ class SortingMachine(gym.Env):
         )
 
         self._initial_machine_state()
+
+        logger.info(
+            f"""Environment initialized, with: 
+                    action masking: {self.do_action_masking}, 
+                    reward function: {self.reward_function}, 
+                    naive: {self.naive}, 
+                    maximum data length: {self.max_data_len}, 
+                    maximum program length: {self.overall_max_program_len}, 
+                    maximum exec cost: {self.maximum_exec_cost}"""
+        )
 
     def _initial_machine_state(self):
         self.program: np.array = np.array([], dtype=np.int64)

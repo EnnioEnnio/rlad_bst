@@ -21,15 +21,19 @@ import time
 import gymnasium as gym
 import wandb
 from gymnasium.utils.env_checker import check_env
+from print_on_steroids import logger
+from simple_parsing import parse
 from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.utils import set_random_seed
 from wandb.integration.sb3 import WandbCallback
 
 import rlad_bst.bst_sort_machine  # noqa: F401 # for env registration only
+
+# from rlad_bst.parser import load_config_from_yaml
+from rlad_bst.args import TrainingArgs
 from rlad_bst.helpers import GrowDataLenCallback
 from rlad_bst.model import get_model, load_from_checkpoint
-from rlad_bst.parser import load_config_from_yaml
 
 WANDB_PROJECT = "rlad_bst"
 WANDB_ENTITY = "rlad_bst"
@@ -49,44 +53,45 @@ def wait_for_debugger(port: int = 56785):
 
 
 def main():
-    config: dict = load_config_from_yaml()
+    # config: dict = load_config_from_yaml()
+    args = parse(TrainingArgs, add_config_path_arg=True)
     set_random_seed(42)
-
-    if config.get("debug", False):
+    logger.info(f"Training with args: {args}")
+    if args.debug:
         wait_for_debugger()
 
-    if config.get("offline", False):
+    if args.offline:
         import os
 
         os.environ["WANDB_MODE"] = "dryrun"
 
-    start_data_len = config.get("start_data_len", 3)
-    print(
-        f"Load enviroment with array of size {start_data_len}, max program length {config.get('max_program_len_factor', 10) * start_data_len} and max exec cost {config.get('max_exec_cost_factor', 20) * start_data_len}"  # noqa: E501
+    start_data_len = args.start_data_len
+    logger.info(
+        f"Load enviroment with array of size {start_data_len}, max program length {args.max_program_len_factor * start_data_len} and max exec cost {args.max_exec_cost_factor * start_data_len}"  # noqa: E501
     )
-    if config["grow_data"]:
-        print(
-            f"Growing activated: Checking to grow data length every {config['eval_interval']} steps with patience {config['patience']} and delta {config['delta']}"  # noqa: E501
+    if args.grow_data:
+        logger.info(
+            f"Growing activated: Checking to grow data length every {args.eval_interval} steps with patience {args.patience} and delta {args.delta}"  # noqa: E501
         )
-        print(f"Maximum data length is {config.get('max_data_len', 7)}")
+        logger.info(f"Maximum data length is {args.max_data_len}")
     else:
-        print("Growing deactivated")
-        assert start_data_len == config.get(
-            "max_data_len", 7
+        logger.info("Growing deactivated")
+        assert (
+            start_data_len == args.max_data_len
         ), "Without growing start and max data length must be the same"
 
     env_config = {
         "id": "rlad/bst-v0",
         "render_mode": None,
-        "max_data_len": config.get("max_data_len", 7),
-        "start_data_len": start_data_len,
-        "start_program_len_factor": config.get("start_program_len_factor", 1),
-        "max_program_len_factor": config.get("max_program_len_factor", 10),
-        "max_exec_cost_factor": config.get("max_exec_cost_factor", 20),
-        "do_action_masking": config.get("do_action_masking", False),
-        "verbosity": config.get("verbosity", 0),
-        "reward_function": config.get("reward_function"),
-        "naive": config.get("naive", False),
+        "max_data_len": args.max_data_len,
+        "start_data_len": args.start_data_len,
+        "start_program_len_factor": args.start_program_len_factor,
+        "max_program_len_factor": args.max_program_len_factor,
+        "max_exec_cost_factor": args.max_exec_cost_factor,
+        "do_action_masking": args.do_action_masking,
+        "verbosity": args.verbosity,
+        "reward_function": args.reward_function,
+        "naive": args.naive,
     }
 
     env = gym.make(**env_config)
@@ -96,20 +101,20 @@ def main():
     check_env(env.unwrapped)
 
     model_args = {
-        "pretrained_encoder": config.get("pretrained_encoder"),
-        "custom_value_net": config.get("use_custom_value_net", True),
-        "custom_action_net": config.get("use_custom_action_net", True),
+        "pretrained_encoder": args.pretrained_encoder,
+        "custom_value_net": args.use_custom_value_net,
+        "custom_action_net": args.use_custom_action_net,
     }
 
     # If we do NOT have a model checkpoint, train a model
-    if not config.get("model_checkpoint"):
-        run_name = config.get("run_name", None)
+    if not args.model_checkpoint:
+        run_name = args.run_name
         run_name = run_name + str(time.time()) if run_name else None
 
         run = wandb.init(
             project=WANDB_PROJECT,
             entity=WANDB_ENTITY,
-            config=config,
+            config=args,
             sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
             monitor_gym=True,
             save_code=True,
@@ -120,34 +125,34 @@ def main():
         env = Monitor(env)
         eval_env = Monitor(eval_env)
 
-        model = get_model(
+        ppo_model = get_model(
             env=env,
-            verbose=config["verbosity"],
+            verbose=args.verbosity,
             tensorboard_log=f"runs/{run.id}",
-            batch_size=config["batch_size"],
-            ent_coef=config["entropy_coefficient"],
+            batch_size=args.batch_size,
+            ent_coef=args.entropy_coefficient,
             model_args=model_args,
-            temperatur=config["temperature"],
-            learning_rate=config["learning_rate"],
+            temperature=args.temperature,
+            learning_rate=args.learning_rate,
         )
 
-        model.learn(
-            total_timesteps=config["total_timesteps"],
+        ppo_model.learn(
+            total_timesteps=args.total_timesteps,
             callback=CallbackList(
                 [
                     WandbCallback(
-                        gradient_save_freq=config["gradient_save_freq"],
+                        gradient_save_freq=args.gradient_save_freq,
                         model_save_path=f"models/{run.name}",
-                        verbose=config["verbosity"],
+                        verbose=args.verbosity,
                     ),
                     GrowDataLenCallback(
-                        n_steps=config["eval_interval"],
+                        n_steps=args.eval_interval,
                         eval_env=eval_env,
-                        patience=config["patience"],
-                        delta=config["delta"],
+                        patience=args.patience,
+                        delta=args.delta,
                         checkpoint_path=f"checkpoints/{run.name}",
-                        grow_data=config["grow_data"],
-                        grow_program_len=config["grow_program_len"],
+                        grow_data=args.grow_data,
+                        grow_program_len=args.grow_program_len,
                     ),
                 ]
             ),
@@ -157,12 +162,12 @@ def main():
 
     else:
         # Otherwise, load a previously trained model
-        model = load_from_checkpoint(
-            config["model_checkpoint"],
+        ppo_model = load_from_checkpoint(
+            args.model_checkpoint,
             env,
-            config["verbosity"],
+            args.verbosity,
             None,
-            config["batch_size"],
+            args.batch_size,
             0.0,
             model_args,
         )
@@ -170,7 +175,7 @@ def main():
         terminated, truncated = False, False
         c = 0
         while not terminated and not truncated:
-            action, _states = model.predict(
+            action, _states = ppo_model.predict(
                 obs,
                 deterministic=True,
                 action_masks=env.unwrapped.action_masks(),
