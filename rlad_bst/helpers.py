@@ -101,7 +101,7 @@ class GrowDataLenCallback(BaseCallback):
                     self.model.get_env().get_attr("current_data_len"),
                 )
             if self.grow_program_len and self._check_if_increase_program_len(
-                mean_reward, episodes_terminated
+                mean_reward
             ):
                 self.model.get_env().env_method("increase_program_len")
                 self.eval_env.unwrapped.increase_program_len()
@@ -214,8 +214,8 @@ class GrowDataLenCallback(BaseCallback):
         We increase the data lenght if all episodes terminated
         and the reward is not getting better.
         """
-        if not len(episodes_terminated) == sum(episodes_terminated):
-            logger.info("Not all episodes terminated: ", episodes_terminated)
+        if not max(episodes_terminated):
+            logger.info("No episodes terminated: ", episodes_terminated)
             return False
         if mean_reward > self.data_mean_reward + self.delta:
             self.data_mean_reward = mean_reward
@@ -230,9 +230,7 @@ class GrowDataLenCallback(BaseCallback):
                 return True
         return False
 
-    def _check_if_increase_program_len(
-        self, mean_reward: float, episodes_terminated: float
-    ) -> bool:
+    def _check_if_increase_program_len(self, mean_reward: float) -> bool:
         """
         We increase the program length if the model has solved the subproblem,
         meaning the reward is not getting better but also not worse.

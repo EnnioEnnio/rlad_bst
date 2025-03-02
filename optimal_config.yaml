@@ -24,7 +24,7 @@ entropy_coefficient: 0.1            # toTrain
 # Callback params
 grow_data: false                    # toTest
 grow_program_len: false             # toTest
-delta: 0.01
+delta: 0.5
 patience: 2
 eval_interval: 10_000
 

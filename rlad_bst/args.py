@@ -42,7 +42,7 @@ class TrainingArgs:
     # Callback params
     grow_data: bool = field(default=False)
     grow_program_len: bool = field(default=False)
-    delta: float = field(default=0.01)
+    delta: float = field(default=0.5)
     patience: int = field(default=2)
     eval_interval: int = field(default=10_000)
 
