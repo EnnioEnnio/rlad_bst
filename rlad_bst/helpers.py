@@ -154,7 +154,7 @@ class GrowDataLenCallback(BaseCallback):
                 {
                     f"val/first_action_{action}": self.first_step_logs[-1][
                         "temp_probs"
-                    ][i].item()
+                    ][0][i].item()
                     for i, action in enumerate(self.action_names)
                 }
             )
