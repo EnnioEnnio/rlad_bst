@@ -26,6 +26,7 @@ class SortingMachine(gym.Env):
         max_program_len_factor,
         max_exec_cost_factor,
         do_action_masking,
+        correct_reward_scale,
         verbosity=1,
         render_mode=None,
         reward_function="new",
@@ -43,6 +44,7 @@ class SortingMachine(gym.Env):
             max_program_len_factor * self.max_data_len
         )
         self.reward_function = reward_function
+        self.correct_reward_scale = correct_reward_scale
         self.naive = naive
 
         self.pad_value = -1
@@ -334,7 +336,11 @@ class SortingMachine(gym.Env):
         # If we terminate we give a bigger reward to
         # compensate for the early stop
         if terminated:
-            reward = self.program_len - len(self.program) + 1
+            reward = (
+                self.correct_reward_scale
+                * (self.program_len - len(self.program))
+                + 1
+            )
 
         return (
             self._get_obs(),

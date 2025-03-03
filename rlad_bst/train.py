@@ -92,6 +92,7 @@ def main():
         "verbosity": args.verbosity,
         "reward_function": args.reward_function,
         "naive": args.naive,
+        "correct_reward_scale": args.correct_reward_scale,
     }
 
     env = gym.make(**env_config)

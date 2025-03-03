@@ -26,6 +26,7 @@ class TrainingArgs:
     reward_function: str = field(
         default="new", help='Choose between "old" or "new"'
     )
+    correct_reward_scale: int = field(default=1)
     naive: bool = field(default=False)
 
     # Train params
