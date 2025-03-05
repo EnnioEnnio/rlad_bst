@@ -27,6 +27,7 @@ class SortingMachine(gym.Env):
         max_exec_cost_factor,
         do_action_masking,
         correct_reward_scale,
+        incremental_reward=False,
         verbosity=1,
         render_mode=None,
         reward_function="new",
@@ -45,6 +46,7 @@ class SortingMachine(gym.Env):
         )
         self.reward_function = reward_function
         self.correct_reward_scale = correct_reward_scale
+        self.incremental_reward = incremental_reward
         self.naive = naive
 
         self.pad_value = -1
@@ -213,6 +215,7 @@ class SortingMachine(gym.Env):
 
         self.written_numbers = []
         self.visited = np.zeros_like(self.data)
+        self.last_reward = 0.0
         self.maximum_exec_cost = (
             self.max_exec_cost_factor * self.current_data_len
         )
@@ -320,7 +323,7 @@ class SortingMachine(gym.Env):
         Calculate Reward based on function set in config (not beautiful, sorry)
         """
         if self.reward_function == "new":
-            reward = calculate_reward(
+            new_reward = calculate_reward(
                 self.result,
                 self.edge_distance_matrix,
                 self.max_penalty,
@@ -329,17 +332,21 @@ class SortingMachine(gym.Env):
                 self.current_data_len,
             )
         else:
-            reward = calculate_old_reward(
+            new_reward = calculate_old_reward(
                 solution_arr=self.correct_tree, candidate_arr=self.result
             )
+
+        if self.incremental_reward:
+            reward = new_reward - self.last_reward
+            self.last_reward = new_reward
+        else:
+            reward = new_reward
 
         # If we terminate we give a bigger reward to
         # compensate for the early stop
         if terminated:
-            reward = (
-                self.correct_reward_scale
-                * (self.program_len - len(self.program))
-                + 1
+            reward = self.correct_reward_scale * (
+                self.program_len - len(self.program) + 1
             )
 
         return (

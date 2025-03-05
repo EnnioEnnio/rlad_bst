@@ -27,6 +27,7 @@ class TrainingArgs:
         default="new", help='Choose between "old" or "new"'
     )
     correct_reward_scale: int = field(default=1)
+    incremental_reward: bool = field(default=False)
     naive: bool = field(default=False)
 
     # Train params

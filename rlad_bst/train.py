@@ -93,6 +93,7 @@ def main():
         "reward_function": args.reward_function,
         "naive": args.naive,
         "correct_reward_scale": args.correct_reward_scale,
+        "incremental_reward": args.incremental_reward,
     }
 
     env = gym.make(**env_config)
