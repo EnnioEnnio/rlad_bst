@@ -1,21 +1,24 @@
 #!/bin/bash
-python3 rlad_bst/train.py  --config optimal_config.yaml --run-name base
-python3 rlad_bst/train.py  --config optimal_config.yaml --do-action-masking False --run-name no_action_masking
-python3 rlad_bst/train.py  --config optimal_config.yaml --reward-function old --run-name old_reward
+python3 rlad_bst/train.py  --config optimal_config.yaml --run_name base
+python3 rlad_bst/train.py  --config optimal_config.yaml --do_action_masking False --run_name no_action_masking
+python3 rlad_bst/train.py  --config optimal_config.yaml --reward_function old --run_name old_reward
+python3 rlad_bst/train.py  --config optimal_config.yaml --run_name incremental_reward --incremental_reward
 
-# CHeck if not already done
-python3 rlad_bst/train.py  --config optimal_config.yaml --entropy-coefficient 0.0 --run-name no_entropy
-python3 rlad_bst/train.py  --config optimal_config.yaml --entropy-coefficient 0.5 --run-name high_entropy
-python3 rlad_bst/train.py  --config optimal_config.yaml --temperature 0.0 --run-name no_temperature 
-python3 rlad_bst/train.py  --config optimal_config.yaml --temperature 10.0 --run-name high_temperature
-python3 rlad_bst/train.py  --config optimal_config.yaml --temperature 0.0 --entropy-coefficient 0.0 --run-name no_temp_entropy
+python3 rlad_bst/train.py  --config optimal_config.yaml --run_name naive --naive True
+python3 rlad_bst/train.py  --config optimal_config.yaml --run_name naive_with_incr_reward --naive True --incremental_reward
 
-python rlad_bst/train.py  --config optimal_config.yaml --use-custom-value-net False --run-name no_value_net
-python rlad_bst/train.py  --config optimal_config.yaml --use-custom-action-net False --run-name no_action_net
-python rlad_bst/train.py  --config optimal_config.yaml --pretrained-encoder jina-not-pretrained --run-name not_pretrained
-python rlad_bst/train.py  --config optimal_config.yaml --pretrained-encoder default --run-name default_encoder
-python rlad_bst/train.py  --config optimal_config.yaml --pretrained-encoder default --use-custom-action-net False --use-custom-value-net False --run-name base
+python3 rlad_bst/train.py  --config optimal_config.yaml --entropy_coefficient 0.0 --run_name no_entropy
+python3 rlad_bst/train.py  --config optimal_config.yaml --entropy_coefficient 0.5 --run_name high_entropy
+python3 rlad_bst/train.py  --config optimal_config.yaml --temperature 1.0 --run_name no_temperature
+python3 rlad_bst/train.py  --config optimal_config.yaml --temperature 10.0 --run_name high_temperature
+python3 rlad_bst/train.py  --config optimal_config.yaml --temperature 1.0 --entropy_coefficient 0.0 --run_name no_temp_entropy
 
-python3 rlad_bst/train.py  --config optimal_config.yaml --start-data-len: 2 --grow-data True --run-name base
-python3 rlad_bst/train.py  --config optimal_config.yaml --start-data-len: 2 --start-program-len-factor: 2 --grow-data True --grow-program-len True --run-name base
-python3 rlad_bst/train.py  --config optimal_config.yaml --start-program-len-factor: 2 --grow-program-len True --run-name base
+python rlad_bst/train.py  --config optimal_config.yaml --use_custom_value_net False --run_name no_value_net
+python rlad_bst/train.py  --config optimal_config.yaml --use_custom_action_net False --run_name no_action_net
+python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder jina-not-pretrained --run_name not_pretrained
+python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder default --run_name default_encoder
+python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder default --use_custom_action_net False --use_custom_value_net False --run_name nothing_custom
+
+python3 rlad_bst/train.py  --config optimal_config.yaml --start_data_len 2 --grow_data True --run_name grow_data
+python3 rlad_bst/train.py  --config optimal_config.yaml --start_data_len 2 --start_program_len_factor 2 --grow_data True --grow_program_len True --run_name grow_data_program
+python3 rlad_bst/train.py  --config optimal_config.yaml --start_program_len_factor 2 --grow_program_len True --run_name grow_program_len
