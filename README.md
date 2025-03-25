@@ -50,6 +50,10 @@ poetry run python3 train.py --config path/to/config.yaml --debug true
 ```bash
 poetry run python3 train.py --config path/to/config.yaml --model-checkpoint path/to/model.zip
 ```
+4. **To run all experiments**:
+```bash
+bash ./run_experiments.sh 
+```
 
 ### VM Setup
 connect to our VM using your HPI-Credentials:
