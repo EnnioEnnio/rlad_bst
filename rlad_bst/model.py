@@ -92,7 +92,7 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
         :param lr_schedule: Learning rate schedule
             lr_schedule(1) is the initial learning rate
         """
-        if self.model_args["pretrained_encoder"] != "default":
+        if self.model_args["pretrained_encoder"] not in ["default", "big_ffn"]:
             logger.info(
                 f"Using custom MLP: {self.model_args['pretrained_encoder']}"
             )
@@ -570,17 +570,17 @@ def get_model(
     temperature: float,
     learning_rate: float,
 ):
-    policy_kwargs = dict(
-        net_arch=dict(pi=[512, 256], vf=[512, 256]),
-        activation_fn=nn.ReLU,
-    )
+    policy_kwargs = {}
 
-    if model_args["pretrained_encoder"] != "default":
+    if model_args["pretrained_encoder"] not in ["default", "big_ffn"]:
         logger.info("Using CustomCombinedExtractor")
         policy_kwargs["features_extractor_class"] = CustomCombinedExtractor
     else:
         logger.info("Using default combined extractor")
         policy_kwargs["features_extractor_class"] = CombinedExtractor
+        if model_args["pretrained_encoder"] == "big_ffn":
+            logger.info("Using big FFN")
+            policy_kwargs["net_arch"] = dict(pi=[1024] * 16, vf=[1024] * 16)
 
     # Create the model
     model = CustomMaskablePPO(

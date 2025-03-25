@@ -51,7 +51,7 @@ class TrainingArgs:
     # Model params
     pretrained_encoder: str = field(
         default="jina-pretrained",
-        help='Choose from "jina-pretrained", "jina-not-pretrained", "default"',
+        help='Choose from "jina-pretrained", "jina-not-pretrained", "default", "big_ffn"',  # noqa: E501
     )
     use_custom_value_net: bool = field(default=True)
     use_custom_action_net: bool = field(default=True)

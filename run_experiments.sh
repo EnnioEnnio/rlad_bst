@@ -18,6 +18,7 @@ python rlad_bst/train.py  --config optimal_config.yaml --use_custom_action_net F
 python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder jina-not-pretrained --run_name not_pretrained
 python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder default --run_name default_encoder
 python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder default --use_custom_action_net False --use_custom_value_net False --run_name nothing_custom
+python rlad_bst/train.py  --config optimal_config.yaml --pretrained_encoder big_ffn --run_name big_ffn
 
 python3 rlad_bst/train.py  --config optimal_config.yaml --start_data_len 2 --grow_data True --run_name grow_data
 python3 rlad_bst/train.py  --config optimal_config.yaml --start_data_len 2 --start_program_len_factor 2 --grow_data True --grow_program_len True --run_name grow_data_program
