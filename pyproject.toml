@@ -16,6 +16,8 @@ wandb = "^0.19.1"
 tensorboard = "^2.18.0"
 transformers = "^4.47.1"
 sb3-contrib = "^2.4.0"
+print-on-steroids = "^1.2.3"
+simple-parsing = "^0.1.7"
 
 
 [tool.poetry.group.dev.dependencies]
