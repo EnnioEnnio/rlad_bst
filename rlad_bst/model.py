@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from gymnasium import spaces
+from print_on_steroids import logger
 from sb3_contrib.common.maskable.distributions import (
     MaskableCategoricalDistribution,
 )
@@ -23,7 +24,7 @@ class CustomMaskablePPO(MaskablePPO):
     """
 
     def __init__(self, *args, **kwargs):
-        self.pretrained_encoder = kwargs.get("pretrained_encoder", False)
+        self.model_args = kwargs.pop("model_args", False)
         self.temperature = kwargs.pop("temperature")
         super().__init__(*args, **kwargs)
 
@@ -33,7 +34,7 @@ class CustomMaskablePPO(MaskablePPO):
             observation_space=self.observation_space,
             action_space=self.action_space,
             lr_schedule=self.lr_schedule,
-            pretrained_encoder=self.pretrained_encoder,
+            model_args=self.model_args,
             temperature=self.temperature,
             **self.policy_kwargs,
         )
@@ -76,7 +77,7 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
     """
 
     def __init__(self, *args, **kwargs):
-        self.pretrained_encoder = kwargs.get("pretrained_encoder")
+        self.model_args = kwargs.pop("model_args")
         self.temperature = kwargs.pop("temperature")
         super().__init__(**kwargs)
         self.action_dist = CustomMaskableCategoricalDistribution(
@@ -91,17 +92,31 @@ class CustomMaskableActorCriticPolicy(MaskableActorCriticPolicy):
         :param lr_schedule: Learning rate schedule
             lr_schedule(1) is the initial learning rate
         """
-        if self.pretrained_encoder != "default":
+        if self.model_args["pretrained_encoder"] not in ["default", "big_ffn"]:
+            logger.info(
+                f"Using custom MLP: {self.model_args['pretrained_encoder']}"
+            )
             self.mlp_extractor = CustomExtractor(
                 self.features_dim,
-                pretrained_encoder=self.pretrained_encoder,
+                pretrained_encoder=self.model_args["pretrained_encoder"],
                 offset_size=self.features_extractor.offset_size,
             )
 
         self.action_net = self.action_dist.proba_distribution_net(
-            latent_dim=self.mlp_extractor.latent_dim_pi
+            latent_dim=self.mlp_extractor.latent_dim_pi,
+            custom=self.model_args["custom_action_net"],
         )
-        self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
+        if self.model_args["custom_value_net"]:
+            logger.info("Using custom value net")
+            self.value_net = CustomHead(self.mlp_extractor.latent_dim_vf, 1)
+        else:
+            # Needed as the latent_dim_vf could have changed
+            logger.info("Using no custom value net")
+            self.value_net = nn.Linear(self.mlp_extractor.latent_dim_vf, 1)
+
+        logger.info(f"encoder: {self.mlp_extractor}")
+        logger.info(f"action_net: {self.action_net}")
+        logger.info(f"value_net: {self.value_net}")
 
         # Init weights: use orthogonal initialization
         # with small initial weight for the output
@@ -298,6 +313,9 @@ class CustomCombinedExtractor(CombinedExtractor):
                 start_offset += length
 
         self.offset_size = self.offsets[-1] + max_lengths[-1]
+        logger.info(
+            f"Using CustomCombinedExtractor with offset: {self.offset_size}"
+        )
 
     def forward(self, observations: TensorDict) -> torch.Tensor:
         encoded_tensor_list = []
@@ -322,19 +340,26 @@ class CustomExtractor(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         pretrained_encoder: str = kwargs.get("pretrained_encoder")
-        if pretrained_encoder == "jina-pretrained":
-            self.encoder = AutoModel.from_pretrained(
-                "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
+        if pretrained_encoder.split("-")[0] == "jina":
+            encoder_name = "jinaai/jina-embeddings-v2-small-en"
+        else:
+            raise ValueError(
+                f"Pretrained encoder {pretrained_encoder} not supported"
             )
-        elif pretrained_encoder == "jina-not-pretrained":
+
+        if pretrained_encoder.split("-")[1] == "pretrained":
+            logger.info(f"Using pretrained encoder: {encoder_name}")
+            self.encoder = AutoModel.from_pretrained(
+                encoder_name, trust_remote_code=True
+            )
+        else:
+            logger.info(f"Using not pretrained encoder: {encoder_name}")
             config = AutoConfig.from_pretrained(
-                "jinaai/jina-embeddings-v2-small-en", trust_remote_code=True
+                encoder_name, trust_remote_code=True
             )
             self.encoder = AutoModel.from_config(
                 config, trust_remote_code=True
             )
-        else:
-            print(f'ERROR: "{pretrained_encoder}" is not possible')
         # The embedding matrix of the model does not make sense for our model
         # we will replace it by a embedding matrix of only 112 + 2 elements
         self.encoder.embeddings.word_embeddings = nn.Embedding(
@@ -369,10 +394,15 @@ class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
     """
 
     def __init__(self, *args, **kwargs):
+        logger.info(
+            f"Using CustomMaskableCategoricalDistribution with temperature: {kwargs.get('temperature')}"  # noqa: E501
+        )
         self.temperature = kwargs.pop("temperature")
         super().__init__(*args, **kwargs)
 
-    def proba_distribution_net(self, latent_dim: int) -> nn.Module:
+    def proba_distribution_net(
+        self, latent_dim: int, custom: bool
+    ) -> nn.Module:
         """
         Create the layer that represents the distribution:
         it will be the logits of the Categorical distribution.
@@ -382,8 +412,11 @@ class CustomMaskableCategoricalDistribution(MaskableCategoricalDistribution):
             of the policy network (before the action layer)
         :return:
         """
-        action_logits = CustomHead(latent_dim, self.action_dim)
-        return action_logits
+        if custom:
+            logger.info("Using custom action net")
+            return CustomHead(latent_dim, self.action_dim)
+        logger.info("Using default action net")
+        return nn.Linear(latent_dim, self.action_dim)
 
     def proba_distribution(
         self, action_logits: torch.Tensor, should_log=False
@@ -533,15 +566,21 @@ def get_model(
     tensorboard_log,
     batch_size: int,
     ent_coef: float,
-    pretrained_encoder: str,
-    temperatur: float,
+    model_args: dict,
+    temperature: float,
     learning_rate: float,
 ):
-    policy_kwargs = dict(
-        net_arch=dict(pi=[512, 256], vf=[512, 256]),
-        activation_fn=nn.ReLU,
-        features_extractor_class=CustomCombinedExtractor,
-    )
+    policy_kwargs = {}
+
+    if model_args["pretrained_encoder"] not in ["default", "big_ffn"]:
+        logger.info("Using CustomCombinedExtractor")
+        policy_kwargs["features_extractor_class"] = CustomCombinedExtractor
+    else:
+        logger.info("Using default combined extractor")
+        policy_kwargs["features_extractor_class"] = CombinedExtractor
+        if model_args["pretrained_encoder"] == "big_ffn":
+            logger.info("Using big FFN")
+            policy_kwargs["net_arch"] = dict(pi=[1024] * 16, vf=[1024] * 16)
 
     # Create the model
     model = CustomMaskablePPO(
@@ -552,8 +591,8 @@ def get_model(
         tensorboard_log=tensorboard_log,
         batch_size=batch_size,
         ent_coef=ent_coef,
-        pretrained_encoder=pretrained_encoder,
-        temperature=temperatur,
+        model_args=model_args,
+        temperature=temperature,
         learning_rate=learning_rate,
     )
     return model

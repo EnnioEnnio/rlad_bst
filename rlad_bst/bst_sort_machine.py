@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from gymnasium.envs.registration import register
+from print_on_steroids import logger
 
 from rlad_bst.reward import (
     calculate_old_reward,
@@ -25,9 +26,12 @@ class SortingMachine(gym.Env):
         max_program_len_factor,
         max_exec_cost_factor,
         do_action_masking,
+        correct_reward_scale,
+        incremental_reward=False,
         verbosity=1,
         render_mode=None,
         reward_function="new",
+        naive=False,
     ):
         self.max_data_len = max_data_len
         self.current_data_len = start_data_len
@@ -41,6 +45,9 @@ class SortingMachine(gym.Env):
             max_program_len_factor * self.max_data_len
         )
         self.reward_function = reward_function
+        self.correct_reward_scale = correct_reward_scale
+        self.incremental_reward = incremental_reward
+        self.naive = naive
 
         self.pad_value = -1
 
@@ -99,6 +106,14 @@ class SortingMachine(gym.Env):
             self._cmd_name_to_action_nr["compareright"],
             self._cmd_name_to_action_nr["leftchild"],
             self._cmd_name_to_action_nr["rightchild"],
+        ]
+
+        # To solve the problem for a fixed size you only need a few commands
+        self._naive_actions = [
+            self._cmd_name_to_action_nr["leftchild"],
+            self._cmd_name_to_action_nr["rightchild"],
+            self._cmd_name_to_action_nr["write"],
+            self._cmd_name_to_action_nr["parent"],
         ]
 
         self.action_space = spaces.Discrete(len(self._action_to_command))
@@ -167,6 +182,16 @@ class SortingMachine(gym.Env):
 
         self._initial_machine_state()
 
+        logger.info(
+            f"""Environment initialized, with: 
+                    action masking: {self.do_action_masking}, 
+                    reward function: {self.reward_function}, 
+                    naive: {self.naive}, 
+                    maximum data length: {self.max_data_len}, 
+                    maximum program length: {self.overall_max_program_len}, 
+                    maximum exec cost: {self.maximum_exec_cost}"""
+        )
+
     def _initial_machine_state(self):
         self.program: np.array = np.array([], dtype=np.int64)
         self.data: np.array = np.array(
@@ -190,6 +215,7 @@ class SortingMachine(gym.Env):
 
         self.written_numbers = []
         self.visited = np.zeros_like(self.data)
+        self.last_reward = 0.0
         self.maximum_exec_cost = (
             self.max_exec_cost_factor * self.current_data_len
         )
@@ -297,7 +323,7 @@ class SortingMachine(gym.Env):
         Calculate Reward based on function set in config (not beautiful, sorry)
         """
         if self.reward_function == "new":
-            reward = calculate_reward(
+            new_reward = calculate_reward(
                 self.result,
                 self.edge_distance_matrix,
                 self.max_penalty,
@@ -306,14 +332,22 @@ class SortingMachine(gym.Env):
                 self.current_data_len,
             )
         else:
-            reward = calculate_old_reward(
+            new_reward = calculate_old_reward(
                 solution_arr=self.correct_tree, candidate_arr=self.result
             )
+
+        if self.incremental_reward:
+            reward = new_reward - self.last_reward
+            self.last_reward = new_reward
+        else:
+            reward = new_reward
 
         # If we terminate we give a bigger reward to
         # compensate for the early stop
         if terminated:
-            reward = self.program_len - len(self.program) + 1
+            reward = self.correct_reward_scale * (
+                self.program_len - len(self.program) + 1
+            )
 
         return (
             self._get_obs(),
@@ -368,6 +402,10 @@ class SortingMachine(gym.Env):
     def action_masks(self) -> np.array:
         if not self.do_action_masking:
             return np.ones(len(self._action_to_command))
+        elif self.naive:
+            mask = np.zeros(len(self._action_to_command))
+            mask[self._naive_actions] = 1
+            return mask
 
         if self.last_action == len(self._action_to_command):
             mask = np.zeros(len(self._action_to_command))

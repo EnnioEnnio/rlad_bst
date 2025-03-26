@@ -8,16 +8,15 @@ start_data_len: 7                   # toTest
 max_data_len: 7
 verbosity: 0
 do_action_masking: true             # toTest
-reward_function: "new"          # Choose between "old" or "new"
+reward_function: "new"           # Choose between "old" or "new"
 naive: false                        # toTest
-
 
 # Train params
 total_timesteps: 1_000_000
 gradient_save_freq: 100
-batch_size: 256                     # toTrain
+batch_size: 64                     # toTrain
 model_checkpoint: null #"models/ohfmwinz/model.zip" # str | null
-learning_rate: 0.0003               # toTrain
+learning_rate: 0.00003               # toTrain
 
 temperature: 2.0                    # toTrain
 entropy_coefficient: 0.1            # toTrain
@@ -25,7 +24,7 @@ entropy_coefficient: 0.1            # toTrain
 # Callback params
 grow_data: false                    # toTest
 grow_program_len: false             # toTest
-delta: 0.01
+delta: 0.5
 patience: 2
 eval_interval: 10_000
 
@@ -35,5 +34,5 @@ use_custom_value_net: True
 use_custom_action_net: True
 
 # Debug params
-offline: True
-debug: True
+offline: false
+debug: false

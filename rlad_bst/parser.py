@@ -46,6 +46,14 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
+        "--run-name",
+        type=str,
+        default="wandb",
+    )
+
+    # Env params
+
+    parser.add_argument(
         "--start-data-len",
         type=int,
         required=False,
@@ -53,6 +61,12 @@ def parse_arguments() -> dict:
 
     parser.add_argument(
         "--max-data-len",
+        type=int,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--start-program-len-factor",
         type=int,
         required=False,
     )
@@ -85,6 +99,13 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
+        "--naive",
+        type=bool,
+        required=False,
+    )
+
+    # Train params
+    parser.add_argument(
         "--total-timesteps",
         type=int,
         required=False,
@@ -97,14 +118,8 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
-        "--offline",
-        type=bool,
-        required=False,
-    )
-
-    parser.add_argument(
-        "--debug",
-        type=bool,
+        "--batch-size",
+        type=int,
         required=False,
     )
 
@@ -133,21 +148,17 @@ def parse_arguments() -> dict:
         required=False,
     )
 
+    # Callback params
+
     parser.add_argument(
-        "--batch-size",
-        type=int,
+        "--grow-data",
+        type=bool,
         required=False,
     )
 
     parser.add_argument(
-        "--eval-interval",
-        type=int,
-        required=False,
-    )
-
-    parser.add_argument(
-        "--patience",
-        type=int,
+        "--grow-program-len",
+        type=bool,
         required=False,
     )
 
@@ -158,16 +169,48 @@ def parse_arguments() -> dict:
     )
 
     parser.add_argument(
-        "--run-name",
-        type=str,
-        required=True,
+        "--patience",
+        type=int,
+        required=False,
     )
 
+    parser.add_argument(
+        "--eval-interval",
+        type=int,
+        required=False,
+    )
+
+    # Model params
     parser.add_argument(
         "--pretrained-encoder",
         type=str,
         required=False,
         help='Choose from "jina-pretrained", "jina-not-pretrained", "default"',
+    )
+
+    parser.add_argument(
+        "--use-custom-value-net",
+        type=bool,
+        default=True,
+    )
+
+    parser.add_argument(
+        "--use-custom-action-net",
+        type=bool,
+        default=True,
+    )
+
+    # Debug params
+    parser.add_argument(
+        "--offline",
+        type=bool,
+        required=False,
+    )
+
+    parser.add_argument(
+        "--debug",
+        type=bool,
+        required=False,
     )
 
     return vars(parser.parse_args())
